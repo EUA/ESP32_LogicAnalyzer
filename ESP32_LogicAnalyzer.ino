@@ -56,7 +56,7 @@ void setup(void) {
   cfg.gpio_bus[14] = 14;
   cfg.gpio_bus[15] = 15;
 
-  cfg.gpio_clk = 22; // XCK
+  cfg.gpio_clk = 23; // Pin23 used for XCK input from LedC
   cfg.bits = I2S_PARALLEL_BITS_16;
   cfg.clkspeed_hz = 2 * 1000 * 1000; //resulting pixel clock = 1MHz
   cfg.buf = &bufdesc;

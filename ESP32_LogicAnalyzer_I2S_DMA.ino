@@ -244,7 +244,8 @@ void i2s_parallel_setup(const i2s_parallel_config_t *cfg) {
   int sig_data_base, sig_clk;
 
   sig_data_base = I2S0I_DATA_IN0_IDX;
-  sig_clk = I2S0I_WS_IN_IDX;
+  sig_clk       = I2S0I_WS_IN_IDX;
+  //sig_clk       = I2S0I_BCK_IN_IDX;
    
   //Route the signals
   gpio_setup_in(cfg->gpio_bus[0], sig_data_base + 0, false); // D0
@@ -268,13 +269,12 @@ void i2s_parallel_setup(const i2s_parallel_config_t *cfg) {
 
 
   //ToDo: Clk/WS may need inversion?
-  //gpio_setup_in(cfg->gpio_clk, sig_clk, true);
   gpio_setup_in(cfg->gpio_clk, sig_clk, false);
 
   gpio_matrix_in(0x38,    I2S0I_V_SYNC_IDX, false);
   gpio_matrix_in(0x38,    I2S0I_H_SYNC_IDX, false);
   gpio_matrix_in(0x38,    I2S0I_H_ENABLE_IDX, false);
-//  gpio_matrix_in(0x38,    I2S0I_WS_IN_IDX, false);
+  //gpio_matrix_in(0x38,    I2S0I_WS_IN_IDX, false);
 
   // Enable and configure I2S peripheral
   periph_module_enable(PERIPH_I2S0_MODULE);
@@ -293,23 +293,19 @@ void i2s_parallel_setup(const i2s_parallel_config_t *cfg) {
   I2S0.conf2.lcd_en = 1;
   // Use HSYNC/VSYNC/HREF to control sampling
   I2S0.conf2.camera_en = 1;
-  
+
+  // f i2s = fpll / (Num + b/a )) where fpll=80Mhz
   // Configure clock divider
   I2S0.clkm_conf.val = 0;
   I2S0.clkm_conf.clka_en = 0;
-  I2S0.clkm_conf.clkm_div_a = 63;
-  I2S0.clkm_conf.clkm_div_b = 63;
-  
- //We ignore the possibility for fractional division here.
-//  dev->clkm_conf.clkm_div_num = 80000000L / cfg->clkspeed_hz;
-  I2S0.clkm_conf.clkm_div_num = 3;
-  
-  //I2S0.clkm_conf.clkm_div_a = 1;
-  //I2S0.clkm_conf.clkm_div_b = 0;
-  //I2S0.clkm_conf.clkm_div_num = 2;
+    
+  I2S0.clkm_conf.clkm_div_a = 1;
+  I2S0.clkm_conf.clkm_div_b = 0;
+  I2S0.clkm_conf.clkm_div_num = 4;
   
   // FIFO will sink data to DMA
   I2S0.fifo_conf.dscr_en = 1;
+  
   // FIFO configuration
   //I2S0.fifo_conf.rx_fifo_mod = s_state->sampling_mode;
   I2S0.fifo_conf.rx_fifo_mod = 1;// SM_0A0B_0C0D = 1,
@@ -327,8 +323,6 @@ void i2s_parallel_setup(const i2s_parallel_config_t *cfg) {
   I2S0.timing.val = 0;
 //  I2S0.timing.rx_dsync_sw = 1;
 
-
-  
   // FIFO configuration
   //dev->fifo_conf.val = 0;
   I2S0.fifo_conf.rx_fifo_mod = 1; // HN
@@ -347,12 +341,6 @@ void i2s_parallel_setup(const i2s_parallel_config_t *cfg) {
 //dev->sample_rate_conf.tx_bck_div_num=1;
 //dev->clkm_conf.clkm_div_num=3; // datasheet says this must be 2 or greater (but lower values seem to work)
 
-/*
-  dev->timing.val = 0;
-  dev->fifo_conf.rx_data_num = 32; //Thresholds.
-  dev->sample_rate_conf.rx_bits_mod = cfg->bits;
-  dev->conf1.val = 0;
-*/
   //Allocate DMA descriptors
   i2s_state[0] = (i2s_parallel_state_t*)malloc(sizeof(i2s_parallel_state_t));
   i2s_parallel_state_t *st = i2s_state[0];
@@ -386,7 +374,7 @@ void i2s_parallel_setup(const i2s_parallel_config_t *cfg) {
 
 static void enable_out_clock( int freq_in_hz ) {
     ledcSetup(0, freq_in_hz, 1);
-    ledcAttachPin(23, 0);
+    ledcAttachPin(cfg.gpio_clk, 0);
     ledcWrite( 0, 1);
     delay(10);
     /*

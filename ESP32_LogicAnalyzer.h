@@ -13,17 +13,28 @@
 
 #include "driver/ledc.h"
 
-#define Serial_Debug_Port Serial2
-//#define Serial_Debug_Port_Baud 115200
-#define Serial_Debug_Port_Baud 921600
+#define USE_SERIAL2_FOR_OLS_x
 
+#ifdef USE_SERIAL2_FOR_OLS
+
+
+#define Serial_Debug_Port Serial
+#define Serial_Debug_Port_Baud 921600
+#define OLS_Port Serial2
+#define OLS_Port_Baud 3000000
+
+#else
+
+#define Serial_Debug_Port Serial2
+#define Serial_Debug_Port_Baud 921600
 #define OLS_Port Serial
 #define OLS_Port_Baud 921600
-//#define OLS_Port_Baud 3000000
+
+#endif
 
 #define CAPTURE_SIZE 256000
 
-#define ledPin LED_BUILTIN //21
+#define ledPin 21 //Led on while running and Blinks while transfering data.
 
 int stop_at_desc=-1;
 unsigned int logicIndex = 0;

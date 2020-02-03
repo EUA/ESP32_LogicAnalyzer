@@ -3,7 +3,7 @@ A SUMP compatible 16Bit Logic Analyzer for ESP32 MCUs.
 
 * Use Arduino to compile and flash your ESP32.
 
-* You need to connect two pins (GPIO 22 and GPIO 23) for input clk. (Could be handled with code? Send me a patch!)
+* **GPIO23** used for I2S input clk. Don't use it for IO
 
 * Default baud rate is **912600**. You can use UART2 for high speed OLS communication but you need high speed external RS232 TTL device.
 
