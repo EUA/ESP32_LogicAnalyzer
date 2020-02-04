@@ -17,7 +17,6 @@
 
 #ifdef USE_SERIAL2_FOR_OLS
 
-
 #define Serial_Debug_Port Serial
 #define Serial_Debug_Port_Baud 921600
 #define OLS_Port Serial2
@@ -48,7 +47,6 @@ unsigned int delayTime = 0;
 unsigned long divider = 0;
 boolean rleEnabled = 0;
 uint32_t clock_per_read = 0;
-uint32_t delayMicro = 0;
 
 typedef enum {
   I2S_PARALLEL_BITS_8   = 8,

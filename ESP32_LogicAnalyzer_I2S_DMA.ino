@@ -79,6 +79,8 @@ static void IRAM_ATTR i2s_isr(void* arg) {
   ESP_LOGD( "\r\n" );
   */
   
+  //ESP_LOGD(TAG, "Executing DMA ISR on core %d", xPortGetCoreID() );
+  
   //gpio_set_level(, 1); //Should show a pulse on the logic analyzer when an interrupt occurs
   //gpio_set_level(, 0);
   if(I2S0.int_raw.in_done){ //filled desc
@@ -266,15 +268,12 @@ void i2s_parallel_setup(const i2s_parallel_config_t *cfg) {
   gpio_setup_in(cfg->gpio_bus[14], sig_data_base + 14, false); // VS
   gpio_setup_in(cfg->gpio_bus[15], sig_data_base + 15, false); // VS
 
-
-
-  //ToDo: Clk/WS may need inversion?
   gpio_setup_in(cfg->gpio_clk, sig_clk, false);
+//gpio_matrix_in(0x38,    I2S0I_WS_IN_IDX, false);
 
   gpio_matrix_in(0x38,    I2S0I_V_SYNC_IDX, false);
   gpio_matrix_in(0x38,    I2S0I_H_SYNC_IDX, false);
   gpio_matrix_in(0x38,    I2S0I_H_ENABLE_IDX, false);
-  //gpio_matrix_in(0x38,    I2S0I_WS_IN_IDX, false);
 
   // Enable and configure I2S peripheral
   periph_module_enable(PERIPH_I2S0_MODULE);
@@ -291,17 +290,27 @@ void i2s_parallel_setup(const i2s_parallel_config_t *cfg) {
 
   // Enable parallel mode
   I2S0.conf2.lcd_en = 1;
+  
   // Use HSYNC/VSYNC/HREF to control sampling
   I2S0.conf2.camera_en = 1;
 
   // f i2s = fpll / (Num + b/a )) where fpll=80Mhz
   // Configure clock divider
   I2S0.clkm_conf.val = 0;
-  I2S0.clkm_conf.clka_en = 0;
-    
+
+  I2S0.clkm_conf.clka_en = 0;    // select PLL_D2_CLK. Digital Multiplexer that select between APLL_CLK or PLL_D2_CLK.
+  //I2S0.clkm_conf.clk_en = 1;
+  
+  
   I2S0.clkm_conf.clkm_div_a = 1;
   I2S0.clkm_conf.clkm_div_b = 0;
   I2S0.clkm_conf.clkm_div_num = 4;
+  
+  /*
+  I2S0.clkm_conf.clkm_div_a = 3;//  24Mhz
+  I2S0.clkm_conf.clkm_div_b = 1;
+  I2S0.clkm_conf.clkm_div_num = 3;
+  */
   
   // FIFO will sink data to DMA
   I2S0.fifo_conf.dscr_en = 1;
@@ -337,9 +346,9 @@ void i2s_parallel_setup(const i2s_parallel_config_t *cfg) {
   //dev->sample_rate_conf.rx_bck_div_num = 16; //ToDo: Unsure about what this does...
   I2S0.sample_rate_conf.rx_bck_div_num = 1;  // datasheet says this must be 2 or greater (but 1 seems to work)
   
-    // this combination is 20MHz
-//dev->sample_rate_conf.tx_bck_div_num=1;
-//dev->clkm_conf.clkm_div_num=3; // datasheet says this must be 2 or greater (but lower values seem to work)
+  // this combination is 20MHz
+  //dev->sample_rate_conf.tx_bck_div_num=1;
+  //dev->clkm_conf.clkm_div_num=3; // datasheet says this must be 2 or greater (but lower values seem to work)
 
   //Allocate DMA descriptors
   i2s_state[0] = (i2s_parallel_state_t*)malloc(sizeof(i2s_parallel_state_t));

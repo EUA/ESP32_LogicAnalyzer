@@ -219,18 +219,12 @@ void get_metadata() {
   OLS_Port.write((uint8_t) (capture_size >> 0) & 0xFF);
 
   /* sample rate (20MHz) */
+  uint32_t capture_speed = 200000000;
   OLS_Port.write((uint8_t)0x23);
-  OLS_Port.write((uint8_t)0x01);//20Mhz
-  OLS_Port.write((uint8_t)0x31);
-  OLS_Port.write((uint8_t)0x2d);
-  OLS_Port.write((uint8_t)0x00);
-  /*
-    OLS_Port.write((uint8_t)0x23);
-    OLS_Port.write((uint8_t)0x02);//40Mhz
-    OLS_Port.write((uint8_t)0x62);
-    OLS_Port.write((uint8_t)0x5A);
-    OLS_Port.write((uint8_t)0x00);
-  */
+  OLS_Port.write((uint8_t) (capture_speed >> 24) & 0xFF);
+  OLS_Port.write((uint8_t) (capture_speed >> 16) & 0xFF);
+  OLS_Port.write((uint8_t) (capture_speed >> 8) & 0xFF);
+  OLS_Port.write((uint8_t) (capture_speed >> 0) & 0xFF);
 
   /* number of probes */
   OLS_Port.write((uint8_t)0x40);
@@ -248,28 +242,14 @@ void get_metadata() {
 
 void setupDelay() {
   double rate = 100000000.0 / (divider + 1.0);
-  double cpuclk = 240000000;
-  clock_per_read = cpuclk / rate;
-  delayMicro = 1000000 / rate;
-
-  //enable_out_clock(10*1000*1000);
-  int rateint = rate;
-  //int rateint = 40000000;
-  enable_out_clock(rateint);
-
-  Serial_Debug_Port.printf("Rate=%f\r\n", rate);
-  Serial_Debug_Port.printf("DelayMicro=%u\r\n", delayMicro);
-  Serial_Debug_Port.printf("Mhz : %u\r\n", rate);
-  Serial_Debug_Port.printf("Divider: %u\r\n", divider);
-  Serial_Debug_Port.printf("Clock_per_read:%u\r\n", clock_per_read);
+  enable_out_clock((int)rate);
+  Serial_Debug_Port.printf("Capture Speed : %.2f Mhz\r\n", rate/1000000.0);
 }
 
 void captureMilli() {
   uint32_t a, b, c, d;
-  Serial_Debug_Port.printf("FreeHeap             :%u\r\n", ESP.getFreeHeap());
-  Serial_Debug_Port.printf("FreeHeap Maximum Larg:%u\r\n", heap_caps_get_largest_free_block(1) );
-  Serial_Debug_Port.printf("FreeHeap Maximum Lar2:%u\r\n", heap_caps_get_largest_free_block(100) );
-  Serial_Debug_Port.printf("FreeHeap After Malloc:%u\r\n", ESP.getFreeHeap());
+  Serial_Debug_Port.printf("FreeHeap         :%u\r\n", ESP.getFreeHeap());
+  Serial_Debug_Port.printf("FreeHeap 64 Byte :%u\r\n", heap_caps_get_largest_free_block(64) );
   Serial_Debug_Port.printf("Triger Values 0x%X\r\n", trigger_values);
   Serial_Debug_Port.printf("Triger        0x%X\r\n", trigger);
   Serial_Debug_Port.printf("Running on CORE #%d\r\n", xPortGetCoreID());
@@ -277,26 +257,7 @@ void captureMilli() {
 
   digitalWrite( ledPin, HIGH );
 
-  //CAPTURE_SIZE = readCount;
-  //dma_desc_deinit();
-  //dma_desc_init(readCount);
-
   ESP_LOGD(TAG, "dma_sample_count: %d", s_state->dma_sample_count);
-
-  /*
-    if(readCount*2 < 4000){
-      lldesc_t* pd = &s_state->dma_desc[0];
-      pd->length = readCount*2;
-      pd->size = pd->length;
-      pd->owner = 1;
-      pd->sosf = 1;
-      pd->eof = 1;
-      pd->qe.stqe_next = 0x0;
-      //pd->qe.stqe_next = &s_state->dma_desc[1];
-      //I2S0.rx_eof_num = readCount;
-      //I2S0.in_link.addr = (uint32_t) pd;
-      }
-  */
   
   start_dma_capture();
 
@@ -353,7 +314,6 @@ void captureMilli() {
         if (tx_count >= readCount)
           goto brexit;
       }
-      //buff_process_trigger((uint16_t*)s_state->dma_buf[j], s_state->dma_buf_width);
     }
   }
 brexit:
