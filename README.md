@@ -1,6 +1,8 @@
 # ESP32 LogicAnalyzer
 A SUMP compatible 16Bit Logic Analyzer for ESP32 MCUs.
 
+![PulseView](/ESP32_LogicAnalyzer_in_PulseView.png)
+
 * Use Arduino to compile and flash your ESP32.
 
 * **GPIO23** used for I2S input clk. Don't use it for IO
