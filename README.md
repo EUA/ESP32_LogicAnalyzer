@@ -1,3 +1,6 @@
+Might WROOVER version modules allows more. Not tested.
+
+Analog input or RLE compression is NOT available, at least right now.
 # ESP32 LogicAnalyzer
 A *SUMP* compatible 16Bit Logic Analyzer for ESP32 MCUs.
 
@@ -15,8 +18,7 @@ A *SUMP* compatible 16Bit Logic Analyzer for ESP32 MCUs.
 
 * Analog input or RLE compression is **NOT** available, at least right now.
 
-* Using Serial(0) require you flush the RX bytes since ESP32 prints boot debug messages to Serial.https://www.patreon.com/EUA
-You can use this patch https://sigrok.org/bugzilla/show_bug.cgi?id=1025 for PulseView/Sigrok work proper.
+* Using Serial(0) require you flush the RX bytes since ESP32 prints boot debug messages to Serial. You can use this patch https://sigrok.org/bugzilla/show_bug.cgi?id=1025 for PulseView/Sigrok work proper.
 
 
 If you like it, why not to say thanks or support via [Patreon](https://www.patreon.com/EUA)
