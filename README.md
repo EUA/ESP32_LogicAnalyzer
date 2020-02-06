@@ -1,6 +1,3 @@
-Might WROOVER version modules allows more. Not tested.
-
-Analog input or RLE compression is NOT available, at least right now.
 # ESP32 LogicAnalyzer
 A *SUMP* compatible 16Bit Logic Analyzer for ESP32 MCUs.
 
