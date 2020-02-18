@@ -5,7 +5,7 @@ A *SUMP* compatible 16Bit Logic Analyzer for ESP32 MCUs.
 
 * Use Arduino to compile and flash your ESP32.
 
-* Default port is **UART0** and default baudrate is **912600**. Please set "Core Debug Level"=None using UART0 as using OLS port.
+* Default port is **UART0** and default baudrate is **912600**. Please set "Core Debug Level"=None when using UART0 as OLS port.
 
 * You can use **UART2** for high speed OLS communication with using`#define USE_SERIAL2_FOR_OLS @ ESP32_LogicAnalyzer.h.` You can also Core Debug Levels on this mode. Default baudrate is **3M**.
 
