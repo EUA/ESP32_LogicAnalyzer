@@ -15,7 +15,7 @@
 
 #define ALLOW_ZERO_RLE  // 0 Fast ~26k clock per 4k block, 1 SLOW ~32k clock per 4k block
 
-#define USE_SERIAL2_FOR_OLS
+#define USE_SERIAL2_FOR_OLS_x
 
 #ifdef USE_SERIAL2_FOR_OLS
 
@@ -456,7 +456,7 @@ inline void fast_rle_block_encode_asm_8bit(uint8_t *dma_buffer, int sample_size)
       "s32i a6, %2, 0        \n" // update rle_buff_p value
 
       :
-      :"a"(&dma_buffer), "a"(dword_count/2), "a"(&rle_buff_p):
+      :"a"(&dma_buffer), "a"(dword_count), "a"(&rle_buff_p):
       "a4","a5","a6","a7","a8","a9","a10","a11","memory");
 
       

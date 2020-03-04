@@ -133,7 +133,7 @@ static void IRAM_ATTR i2s_isr(void* arg) {
         }
 
       //rle doesn't need to stop at rx eof
-      I2S0.int_clr.val = I2S0.int_raw.val;
+      //I2S0.int_clr.val = I2S0.int_raw.val;
       s_state->dma_desc_cur++;
       return;
       
