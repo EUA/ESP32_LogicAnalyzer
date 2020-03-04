@@ -1,4 +1,4 @@
-/*************************************************************************
+  /*************************************************************************
  * 
  *  ESP32 Logic Analyzer
  *  Copyright (C) 2020 Erdem U. Altinyurt
@@ -33,15 +33,18 @@ i2s_parallel_config_t cfg;
 void setup(void) {
   Serial_Debug_Port.begin(Serial_Debug_Port_Baud);
   OLS_Port.begin(OLS_Port_Baud);
-  
+
+  //WiFi.mode(WIFI_OFF);
+  //btStop();
+    
   pinMode(ledPin, OUTPUT);
 
   dma_desc_init(CAPTURE_SIZE);
 
   cfg.gpio_bus[0] = 0;
-  cfg.gpio_bus[1] = -1;//1 UART 0 RX
+  cfg.gpio_bus[1] = 18;//1 UART 0 RX
   cfg.gpio_bus[2] = 2;
-  cfg.gpio_bus[3] = -1;//3 UART 0 TX
+  cfg.gpio_bus[3] = 19;//3 UART 0 TX
   cfg.gpio_bus[4] = 4;
   cfg.gpio_bus[5] = 5;
   cfg.gpio_bus[6] = -1;//6 bootloop SCK
@@ -258,7 +261,7 @@ void captureMilli() {
   digitalWrite( ledPin, HIGH );
 
   ESP_LOGD(TAG, "dma_sample_count: %d", s_state->dma_sample_count);
-  
+  rle_init();
   start_dma_capture();
 
   while (! s_state->dma_done )
@@ -268,34 +271,158 @@ void captureMilli() {
 
   digitalWrite( ledPin, LOW );
 
-  Serial_Debug_Port.printf("ClockPerRead:%f\r\n", (b - a - 1) / (double)readCount);
-  Serial_Debug_Port.printf("Clock Diff:  %d\r\n", b - a - 1);
-  Serial_Debug_Port.printf("First Clock: %u\r\n", a);
-  Serial_Debug_Port.printf("Last  Clock: %u\r\n", b);
+  Serial_Debug_Port.printf("ReadCount:  %d\r\n",readCount);
+  Serial_Debug_Port.printf("DMA Desc Current: %d\r\n",  s_state->dma_desc_cur);
+
   ESP_LOGD(TAG, "Copying buffer.");
 
-  int filled_buff = (readCount - 1) / s_state->dma_val_per_desc;
-  int filled_sample_offset = (((readCount - 1) % s_state->dma_val_per_desc) / 2) % s_state->dma_sample_per_desc;
-  int filled_sample_full_offset = s_state->dma_buf_width / 4 - 1;
+  int filled_desc = ((readCount/2) / s_state->dma_sample_per_desc);
+  int filled_sample_offset = ((readCount/2) % s_state->dma_sample_per_desc); //((readCount - 1) % s_state->dma_val_per_desc) % s_state->dma_sample_per_desc;
+  int filled_full_sample_offset = s_state->dma_sample_per_desc;
+  
   int tx_count = 0;
-  Serial_Debug_Port.printf("filled_buff = %d\r\n", filled_buff);
-  Serial_Debug_Port.printf("filled_buff_offset = %d\r\n", filled_sample_offset);
+  Serial_Debug_Port.printf("used_desc = %d\r\n", filled_desc);
+  Serial_Debug_Port.printf("used_sample_offset = %d\r\n", filled_sample_offset);
+
+  Serial_Debug_Port.printf( "\r\nDMA Times:" );
+  for(int i = 0 ; i <  50 ; i++){
+    Serial_Debug_Port.printf( "%u\t", time_debug_indice_dma[i]-time_debug_indice_dma[0] );
+    }
+  
+  Serial_Debug_Port.printf( "\r\nRLE Times:" );
+  for(int i = 0 ; i <  50 ; i++){
+    Serial_Debug_Port.printf( "%u\t", time_debug_indice_rle[i]-time_debug_indice_dma[0] );
+    }
+  Serial_Debug_Port.printf( "\r\nDone\r\n" );
+  Serial_Debug_Port.flush();
+  filled_desc--;
+  filled_full_sample_offset--;
+  if( filled_sample_offset-- == 0)
+    filled_sample_offset = filled_full_sample_offset;
+
   dma_elem_t cur;
 
-  if(s_state->dma_desc_triggered<0){ //if not triggered mode,
+/*
+  Serial_Debug_Port.printf("\r\nRAW BlocX \r\n");
+  for ( int i = 0 ; i < 100 ; i++ ){
+     cur = (dma_elem_t&)s_state->dma_buf[0][i];
+     Serial_Debug_Port.printf("0x%X, ", cur.sample2);
+     Serial_Debug_Port.printf("0x%X, ", cur.sample1);
+   }
+
+  Serial_Debug_Port.printf("\r\nRAW Block InpuX:\r\n");
+  for ( int i = 0 ; i < 400 ; i+=2 ){
+     uint8_t *crx = (uint8_t*)s_state->dma_buf[0];
+     Serial_Debug_Port.printf("0x%X, ", *(crx+i) );
+     }
+   Serial_Debug_Port.println();
+*/
+
+
+  if(s_state->dma_desc_triggered < 0){ //if not triggered mode,
     s_state->dma_desc_triggered=0;  //first desc is 0
     ESP_LOGD(TAG, "Normal TX");
     }
   else
     ESP_LOGD(TAG, "Triggered TX");
-  {
-    for ( int j = filled_buff; j >= 0 ; j-- ) {
-      ESP_LOGD(TAG, "filled_buff trgx = %d", (j + s_state->dma_desc_triggered+s_state->dma_desc_count) % s_state->dma_desc_count);
+    
+  if(rleEnabled){
+    ESP_LOGD(TAG, "RLE TX");
+    int rle_fill = (rle_buff_p - rle_buff);
+    Serial_Debug_Port.printf( "RLE Buffer = %d bytes\r\n", rle_fill );
+    uint32_t rle_sample_count=0;
+    uint32_t rle_sample_req_count=0;
+    
+    for(int i=0; i<rle_fill ; i++){
+#ifdef ALLOW_ZERO_RLE
+      if( i%2 != 0 ){
+        rle_sample_count += rle_buff[i];
+        if( readCount > rle_sample_count )
+          rle_sample_req_count= i;
+        }
+
+#else
+#endif
+    }
+    Serial_Debug_Port.printf( "Total RLE Sample Count = %d\r\n", rle_sample_count ); 
+    Serial_Debug_Port.printf( "Total RLE Sample Req Count = %d\r\n", rle_sample_req_count );
+/*
+    for(int i=0; i<32 ; i++){
+     Serial_Debug_Port.printf("Processing DMA Desc: %d", i);
+     fast_rle_block_encode_asm( (uint8_t*)s_state->dma_buf[i], s_state->dma_buf_width);
+     if( rle_buff_p-rle_buff > rle_size - 4000 )
+      break;
+     }
+*/   
+
+#ifdef ALLOW_ZERO_RLE
+      //for( int i =  0 ;  i < readCount - rle_sample_req_count ; i++  )
+      //  OLS_Port.write( 0 );
+      
+      for( int i =  rle_fill-2;  i>=0 ; i-=2  ){
+      //for( int i =  rle_sample_req_count;  i>=0 ; i-=2  ){
+        OLS_Port.write( rle_buff[i+1] | 0x80 ) ;
+        OLS_Port.write( rle_buff[i+0] & 0x7F );
+        }
+#else
+      for( int i =  (rle_buff_p - rle_buff)-1;  i>=0 ; i--  ){
+        OLS_Port.write( rle_buff[i] );
+        }
+
+#endif
+      
+    
+/*
+
+    for( int i = 0  ;  i < 200  ; i++  )
+     OLS_Port.write( 8 );
+    
+    for( int i = s_state->dma_buf_width ;  i > 0   ; i-=4  ){
+       //OLS_Port.write( *(((uint8_t*)s_state->dma_buf[0])+i) & 0x7F );
+       uint8_t *crx = (uint8_t*)s_state->dma_buf[0];
+       OLS_Port.write( *(crx+i+0) );
+       OLS_Port.write( *(crx+i+2) );
+     }
+*/   
+    /*
+    for( int i = (rle_buff_p - rle_buff)-2; i > 0  ; i-=2  ){
+      OLS_Port.write( rle_buff[i+1] -1 | 0x80 ) ;
+      OLS_Port.write( rle_buff[i+0] & 0x7F ) ;
+      }
+      */
+    /*
+    for( int i = 0  ;  i < 200  ; i++  )
+     OLS_Port.write( 8 );
+
+    
+    for ( int i =  filled_sample_full_offset ; i >= 0 ; i-- ) {
+        cur = s_state->dma_buf[0][i];
+        if (channels_to_read == 1) {
+          OLS_Port.write(cur.sample2);
+          OLS_Port.write(cur.sample1);
+        }
+        }
+    */
+
+    /*
+    int x0 = readCount - (rle_buff_p-rle_buff)/2;
+    for( int i = 0; i < x0 ; i+=2 ){
+      OLS_Port.write( ((i/2)%2 ) | 0x80 );
+      OLS_Port.write( (i/2)%2 );     
+    }
+*/      
+
+    }
+   else{
+    for ( int j = filled_desc; j >= 0 ; j-- ) {
+      ESP_LOGD(TAG, "filled_buff trgx = %d", (j + s_state->dma_desc_triggered + s_state->dma_desc_count) % s_state->dma_desc_count);
       digitalWrite( ledPin, !digitalRead(ledPin) );
       //for( int i=s_state->dma_buf_width/4 - 1; i >=0 ; i-- ){
-      for ( int i = (j == filled_buff ? filled_sample_offset : filled_sample_full_offset ) ; i >= 0 ; i-- ) {
+      for ( int i = (j == filled_desc ? filled_sample_offset : filled_full_sample_offset ) ; i >= 0 ; i-- ) {
         //Serial.printf( "%02X %02X ", s_state->dma_buf[j][i].sample1,  s_state->dma_buf[j][i].sample2 );
-        cur = s_state->dma_buf[(j + s_state->dma_desc_triggered+s_state->dma_desc_count) % s_state->dma_desc_count][i];
+        cur = s_state->dma_buf[ (j
+                                +s_state->dma_desc_triggered
+                                +s_state->dma_desc_count) % s_state->dma_desc_count][i];
         if (channels_to_read == 1) {
           OLS_Port.write(cur.sample2);
           OLS_Port.write(cur.sample1);

@@ -7,6 +7,12 @@ void start_dma_capture(void) {
   s_state->dma_desc_cur = 0;
   s_state->dma_received_count = 0;
   s_state->dma_filtered_count = 0;
+  s_state->dma_desc_triggered = 0;
+
+time_debug_indice_dma_p=0;
+time_debug_indice_rle_p=0;
+for(int i=0; i < 1024 ; i++ )
+time_debug_indice_dma[i]=time_debug_indice_rle[i]=0;
 
   ESP_ERROR_CHECK(esp_intr_disable(s_state->i2s_intr_handle));
   i2s_conf_reset();
@@ -19,7 +25,7 @@ void start_dma_capture(void) {
   I2S0.int_ena.in_done = 1;
 
   ESP_LOGD(TAG, "DMA Tigger : 0x%X", trigger );
-  if (trigger) {
+  if (trigger || rleEnabled) {
     stop_at_desc = -1;
     I2S0.rx_eof_num = s_state->dma_buf_width;
     I2S0.int_ena.in_suc_eof = 0;
@@ -68,8 +74,9 @@ uint16_t buff_process_trigger_0(uint16_t *buff, int size, bool printit=true){
   }
 
 static void IRAM_ATTR i2s_isr(void* arg) {
-  if(trigger==0)
+  if(trigger==0){
     ESP_LOGD(TAG, "DMA INT Number %d Status 0x%x", s_state->dma_desc_cur, I2S0.int_raw.val );
+  
   /*
   ESP_LOGD(TAG, "DMA INT take_data? %d", I2S0.int_raw.rx_take_data );
   ESP_LOGD(TAG, "DMA INT in_dscr_empty? %d", I2S0.int_raw.in_dscr_empty );
@@ -80,10 +87,12 @@ static void IRAM_ATTR i2s_isr(void* arg) {
   */
   
   //ESP_LOGD(TAG, "Executing DMA ISR on core %d", xPortGetCoreID() );
+  }
   
   //gpio_set_level(, 1); //Should show a pulse on the logic analyzer when an interrupt occurs
   //gpio_set_level(, 0);
   if(I2S0.int_raw.in_done){ //filled desc
+    time_debug_indice_dma[time_debug_indice_dma_p++]=xthal_get_ccount();
     if(trigger && (stop_at_desc==-1)){
       static uint16_t trigger_helper_0;
       static uint16_t trigger_helper_1;
@@ -92,20 +101,43 @@ static void IRAM_ATTR i2s_isr(void* arg) {
       ESP_LOGD(TAG, "DMA INT Number %d Status 0x%x TL0: x%X TH1: 0x%X", s_state->dma_desc_cur, I2S0.int_raw.val, trigger_helper_0, trigger_helper_1);
       //ESP_LOGD(TAG, "trigger ^ trigger_values 0x%X trigger ^ trigger_values ^ trigger_helper_0 0x%x ", trigger ^ trigger_values,  trigger ^ trigger_values ^ trigger_helper_0 );
       if(( trigger_values & trigger_helper_1 ) || ( (trigger ^ trigger_values) & ~trigger_helper_0 ) ){
-        
-        //stop_at_desc=s_state->dma_desc_cur+10;
-        stop_at_desc= (s_state->dma_desc_cur + (readCount / (s_state->dma_buf_width/2))-1) % s_state->dma_desc_count;
-        ESP_LOGD(TAG, "DMA BREAK! Stop at desc %d", stop_at_desc);
-        
-        s_state->dma_desc_triggered = s_state->dma_desc_cur;
         ESP_LOGD(TAG, "DMA Triggered at desc %d (%d)",  s_state->dma_desc_triggered, s_state->dma_desc_triggered%s_state->dma_desc_count );
-        I2S0.rx_eof_num = readCount/2 ;//- s_state->dma_buf_width/4000; // Total capacity - desc capacity
-        I2S0.int_ena.in_suc_eof = 1;
+        if(rleEnabled){
+          fast_rle_block_encode_asm_8bit( (uint8_t*)s_state->dma_buf[ s_state->dma_desc_cur % s_state->dma_desc_count], s_state->dma_buf_width);
+          }
+        else{
+          stop_at_desc= (s_state->dma_desc_cur + (readCount / (s_state->dma_buf_width/2))-1) % s_state->dma_desc_count;
+          ESP_LOGD(TAG, "DMA BREAK! Stop at desc %d", stop_at_desc);
+          
+          s_state->dma_desc_triggered = s_state->dma_desc_cur;
+          I2S0.rx_eof_num = readCount/2 ;//- s_state->dma_buf_width/4000; // Total capacity - desc capacity
+          I2S0.int_ena.in_suc_eof = 1;
+          }        
         trigger=0;
         I2S0.int_clr.val = I2S0.int_raw.val;
         }
       }
-    
+    else if(rleEnabled){
+      //ESP_LOGD(TAG,"Processing DMA Desc: %d (%d)\r\n", s_state->dma_desc_cur,  s_state->dma_desc_cur % s_state->dma_desc_count);
+      fast_rle_block_encode_asm_8bit( (uint8_t*)s_state->dma_buf[ s_state->dma_desc_cur % s_state->dma_desc_count], s_state->dma_buf_width);
+      //fast_rle_block_encode_asm_16bit( (uint8_t*)s_state->dma_buf[ s_state->dma_desc_cur % s_state->dma_desc_count], s_state->dma_buf_width);
+
+      if( (rle_size - (rle_buff_p - rle_buff )) < 4000) {
+        //break;
+        ESP_LOGD(TAG,"Break due rle_buff fill: %d\r\n", (rle_size - (rle_buff_p - rle_buff )));
+        I2S0.int_ena.in_suc_eof = 1;
+        esp_intr_disable(s_state->i2s_intr_handle);
+        i2s_conf_reset();
+        I2S0.conf.rx_start = 0;
+        s_state->dma_done = true;
+        }
+
+      //rle doesn't need to stop at rx eof
+      I2S0.int_clr.val = I2S0.int_raw.val;
+      s_state->dma_desc_cur++;
+      return;
+      
+      }
     s_state->dma_desc_cur++;
     }
 
@@ -126,7 +158,7 @@ static void IRAM_ATTR i2s_isr(void* arg) {
       ESP_LOGD(TAG, "DMA INT in_suc_eof? %d", I2S0.int_raw.in_suc_eof );
       ESP_LOGD(TAG, "DMA INT rx_rempty? %d", I2S0.int_raw.rx_rempty );
 
-      s_state->dma_desc_cur=0;
+      //s_state->dma_desc_cur=0;
       esp_intr_disable(s_state->i2s_intr_handle);
       i2s_conf_reset();
       I2S0.conf.rx_start = 0;
@@ -154,6 +186,7 @@ static esp_err_t dma_desc_init(int raw_byte_size){
     ESP_LOGD(TAG, "Buffer Total (for DMA): %d bytes", raw_byte_size);
     size_t dma_desc_count = 1;
     size_t buf_size = raw_byte_size;
+    /*
     while (buf_size >= 4096)
     {
         buf_size /= 2;
@@ -163,6 +196,12 @@ static esp_err_t dma_desc_init(int raw_byte_size){
     s_state->dma_val_per_desc = buf_size/2;
     s_state->dma_sample_per_desc = buf_size/4;
     s_state->dma_desc_count = dma_desc_count;
+*/
+    s_state->dma_buf_width = buf_size = 4000;
+    s_state->dma_val_per_desc = 2000;
+    s_state->dma_sample_per_desc = 1000;
+    s_state->dma_desc_count = dma_desc_count = raw_byte_size/4000;
+    
     ESP_LOGD(TAG, "DMA buffer size: %d", buf_size);
     ESP_LOGD(TAG, "DMA buffer count: %d", dma_desc_count);
     ESP_LOGD(TAG, "DMA buffer total: %d bytes", buf_size * dma_desc_count);
@@ -319,10 +358,12 @@ void i2s_parallel_setup(const i2s_parallel_config_t *cfg) {
   //I2S0.fifo_conf.rx_fifo_mod = s_state->sampling_mode;
   I2S0.fifo_conf.rx_fifo_mod = 1;// SM_0A0B_0C0D = 1,
   I2S0.fifo_conf.rx_fifo_mod_force_en = 1;
+  //dev->conf_chan.val = 0;
   I2S0.conf_chan.rx_chan_mod = 1;
+  
   // Clear flags which are used in I2S serial mode
   I2S0.sample_rate_conf.rx_bits_mod = 0;
-  I2S0.conf.rx_right_first = 0;
+  I2S0.conf.rx_right_first = 1;
   I2S0.conf.rx_msb_right = 0;
   I2S0.conf.rx_msb_shift = 0;
   I2S0.conf.rx_mono = 1;
@@ -332,13 +373,6 @@ void i2s_parallel_setup(const i2s_parallel_config_t *cfg) {
   I2S0.timing.val = 0;
 //  I2S0.timing.rx_dsync_sw = 1;
 
-  // FIFO configuration
-  //dev->fifo_conf.val = 0;
-  I2S0.fifo_conf.rx_fifo_mod = 1; // HN
-  I2S0.fifo_conf.rx_fifo_mod_force_en = 1;
-  //dev->conf_chan.val = 0;
-  I2S0.conf_chan.rx_chan_mod = 1;
-  
   I2S0.sample_rate_conf.val = 0;
   // Clear flags which are used in I2S serial mode
   //I2S0.sample_rate_conf.rx_bits_mod = 8;
