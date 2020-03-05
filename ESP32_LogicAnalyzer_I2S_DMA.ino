@@ -93,12 +93,16 @@ static void IRAM_ATTR i2s_isr(void* arg) {
   //gpio_set_level(, 0);
   if(I2S0.int_raw.in_done){ //filled desc
     time_debug_indice_dma[time_debug_indice_dma_p++]=xthal_get_ccount();
+    
+    //Serial_Debug_Port.printf("DMA INT Number %d Status 0x%xX\r\n", s_state->dma_desc_cur, I2S0.int_raw.val);
+    
     if(trigger && (stop_at_desc==-1)){
       static uint16_t trigger_helper_0;
       static uint16_t trigger_helper_1;
       trigger_helper_0 = buff_process_trigger_0((uint16_t*)s_state->dma_buf[ s_state->dma_desc_cur % s_state->dma_desc_count ], s_state->dma_buf_width, false);
       trigger_helper_1 = buff_process_trigger_1((uint16_t*)s_state->dma_buf[ s_state->dma_desc_cur % s_state->dma_desc_count ], s_state->dma_buf_width, false);
       ESP_LOGD(TAG, "DMA INT Number %d Status 0x%x TL0: x%X TH1: 0x%X", s_state->dma_desc_cur, I2S0.int_raw.val, trigger_helper_0, trigger_helper_1);
+
       //ESP_LOGD(TAG, "trigger ^ trigger_values 0x%X trigger ^ trigger_values ^ trigger_helper_0 0x%x ", trigger ^ trigger_values,  trigger ^ trigger_values ^ trigger_helper_0 );
       if(( trigger_values & trigger_helper_1 ) || ( (trigger ^ trigger_values) & ~trigger_helper_0 ) ){
         ESP_LOGD(TAG, "DMA Triggered at desc %d (%d)",  s_state->dma_desc_triggered, s_state->dma_desc_triggered%s_state->dma_desc_count );
@@ -119,6 +123,8 @@ static void IRAM_ATTR i2s_isr(void* arg) {
       }
     else if(rleEnabled){
       //ESP_LOGD(TAG,"Processing DMA Desc: %d (%d)\r\n", s_state->dma_desc_cur,  s_state->dma_desc_cur % s_state->dma_desc_count);
+      //Serial_Debug_Port.printf("Processing DMA Desc: %d (%d)\r\n", s_state->dma_desc_cur,  s_state->dma_desc_cur % s_state->dma_desc_count);
+      Serial_Debug_Port.printf(".");
       fast_rle_block_encode_asm_8bit( (uint8_t*)s_state->dma_buf[ s_state->dma_desc_cur % s_state->dma_desc_count], s_state->dma_buf_width);
       //fast_rle_block_encode_asm_16bit( (uint8_t*)s_state->dma_buf[ s_state->dma_desc_cur % s_state->dma_desc_count], s_state->dma_buf_width);
 
@@ -133,10 +139,9 @@ static void IRAM_ATTR i2s_isr(void* arg) {
         }
 
       //rle doesn't need to stop at rx eof
-      //I2S0.int_clr.val = I2S0.int_raw.val;
+      I2S0.int_clr.val = I2S0.int_raw.val;
       s_state->dma_desc_cur++;
       return;
-      
       }
     s_state->dma_desc_cur++;
     }
