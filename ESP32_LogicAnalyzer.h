@@ -13,9 +13,15 @@
 
 #include "driver/ledc.h"
 
-#define USE_SERIAL2_FOR_OLS 0 // If 1, UART2 = OLS and UART0=Debug
+#define USE_SERIAL2_FOR_OLS 1 // If 1, UART2 = OLS and UART0=Debug
 
 #define ALLOW_ZERO_RLE 1 // 1 Fast ~26k clock per 4k block, 0 SLOW ~32k clock per 4k block
+
+#define CAPTURE_SIZE 128000
+//#define CAPTURE_SIZE 12000
+#define rle_size 96000
+
+#define ledPin 21 //Led on while running and Blinks while transfering data.
 
 
 
@@ -38,11 +44,6 @@
 
 #endif
 
-//#define CAPTURE_SIZE 128000
-#define CAPTURE_SIZE 12000
-#define rle_size 96000
-
-#define ledPin 21 //Led on while running and Blinks while transfering data.
 
 unsigned int time_debug_indice_dma[1024];
 unsigned int time_debug_indice_dma_p=0;
