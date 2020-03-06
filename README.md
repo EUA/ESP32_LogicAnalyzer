@@ -17,7 +17,7 @@ A *SUMP* compatible 16Bit Logic Analyzer for ESP32 MCUs.
 
 * Analog input is **NOT** available.
 
-* RLE compression is under development. 8bit RLE encoder that supports 20Mhz is almost ready.
+* RLE compression is under development. 1 channel RLE compression ready. 2 channel RLE compression will be released soon.
 
 * Using Serial (UART0) require you flush the RX bytes due ESP32 prints boot post debug messages to Serial. You can use this patch https://sigrok.org/bugzilla/show_bug.cgi?id=1025 for PulseView/Sigrok to work **or** please pull **GPIO15** to ground ( and also set **"Core Debug Level"=None** to let UART0 only used for OLS.)
 

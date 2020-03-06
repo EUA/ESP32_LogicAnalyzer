@@ -205,7 +205,7 @@ void get_metadata() {
   /* device name */
   OLS_Port.write((uint8_t)0x01);
   //OLS_Port.write("AGLAMv0");
-  OLS_Port.write("ESP32 Logic Analyzer v0.1");
+  OLS_Port.write("ESP32 Logic Analyzer v0.2");
   OLS_Port.write((uint8_t)0x00);
 
   /* firmware version */
@@ -334,7 +334,7 @@ void captureMilli() {
     uint32_t rle_sample_req_count=0;
     
     for(int i=0; i<rle_fill ; i++){
-#ifdef ALLOW_ZERO_RLE
+#if ALLOW_ZERO_RLE
       if( i%2 != 0 ){
         rle_sample_count += rle_buff[i];
         if( readCount > rle_sample_count )
@@ -355,7 +355,7 @@ void captureMilli() {
      }
 */   
 
-#ifdef ALLOW_ZERO_RLE
+#if ALLOW_ZERO_RLE
       //for( int i =  0 ;  i < readCount - rle_sample_req_count ; i++  )
       //  OLS_Port.write( 0 );
       
