@@ -17,8 +17,8 @@
 
 #define ALLOW_ZERO_RLE 0 // 1 Fast ~26k clock per 4k block, 0 SLOW ~32k clock per 4k block
 
-//#define CAPTURE_SIZE 128000
-#define CAPTURE_SIZE 12000
+#define CAPTURE_SIZE 128000
+//#define CAPTURE_SIZE 12000
 #define rle_size 96000
 
 #define ledPin 21 //Led on while running and Blinks while transfering data.
