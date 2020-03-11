@@ -13,17 +13,15 @@
 
 #include "driver/ledc.h"
 
-#define USE_SERIAL2_FOR_OLS 1 // If 1, UART2 = OLS and UART0=Debug
+#define USE_SERIAL2_FOR_OLS 0 // If 1, UART2 = OLS and UART0=Debug
 
-#define ALLOW_ZERO_RLE 1 // 1 Fast ~26k clock per 4k block, 0 SLOW ~32k clock per 4k block
+#define ALLOW_ZERO_RLE 0 // 1 Fast ~26k clock per 4k block, 0 SLOW ~32k clock per 4k block
 
-#define CAPTURE_SIZE 128000
-//#define CAPTURE_SIZE 12000
+//#define CAPTURE_SIZE 128000
+#define CAPTURE_SIZE 12000
 #define rle_size 96000
 
 #define ledPin 21 //Led on while running and Blinks while transfering data.
-
-
 
 
 #if USE_SERIAL2_FOR_OLS
@@ -215,7 +213,7 @@ bool rle_init(void){
   rle_buff_p=rle_buff;
   rle_buff_end = rle_buff+rle_size-4;
 
-  memset( rle_buff, 0, rle_size);
+  memset( rle_buff, 0x00, rle_size);
 }
 
 void dma_serializer( dma_elem_t *dma_buffer ){
@@ -308,7 +306,6 @@ void fast_rle_block_encode_asm(uint8_t *dma_buffer, int sample_size){
 */
 
 
-
 inline void fast_rle_block_encode_asm_8bit(uint8_t *dma_buffer, int sample_size){ //size, not count
    uint8_t *desc_buff_end=dma_buffer;
    unsigned clocka=0,clockb=0;
@@ -343,85 +340,96 @@ inline void fast_rle_block_encode_asm_8bit(uint8_t *dma_buffer, int sample_size)
       "movi a11, 0x7F        \n" // init rle_masks
       "l32i a6, %2, 0        \n" // Load store rle_buffer address
 
-      "l8ui a8, a4, 2        \n" // a8 as rle_val #2 is first
+      "l8ui a8, a4, 2        \n" // a8 as rle_val (#2 is first)
       "l8ui a9, a4, 0        \n" // a9 as new_val
-      "beq  a9, a8, rle_0    \n" // rle_val == new_val skip
+"beq  a9, a8, rle_0          \n" // rle_val == new_val skip
 
-      "s8i  a8, a6, 0        \n" // *rle_buff_p=rle_val;
-      //"movi a5, 0            \n" //                        *
-      "s8i  a5, a6, 1        \n" // *rle_buff_p+1 = rle_counter; *
-      "movi a5, -1           \n" // rle_counter=-1         *
-      "addi a6, a6, 2        \n" // rle_buff_p ++2 
-      //"addi a6, a6, 1        \n" // rle_buff_p ++
+#if not ALLOW_ZERO_RLE
+      "and  a8, a8, a11      \n" // a11=0x7F
+#endif
+      "s8i  a8, a6, 0        \n" // rle_buff_p=rle_val;
+      //"movi a5, 0            \n" //
+#if ALLOW_ZERO_RLE
+      "s8i  a5, a6, 1        \n" // rle_buff_p+1 = rle_counter
+      "addi a6, a6, 1        \n" // rle_buff_p ++
+#endif
+      "movi a5, -1           \n" // rle_counter=-1
+      "addi a6, a6, 1        \n" // rle_buff_p ++ 
       "mov  a8, a9           \n" // rle_val = new_val
             
       "rle_0:                \n"
       "addi a5, a5, 1        \n" // rle_counter++
-   "loopnez %1, rle_loop_end \n" // Prepare zero-overhead loop
+"loopnez %1, rle_loop_end    \n" // Prepare zero-overhead loop
       "loopStart:            \n"
       "addi a4, a4, 4        \n" // increase dma_buffer_p pointer by 4
 
       "rle_1_start:                \n"
-      "l8ui a9, a4, 2        \n" // a8 as rle_val #2 is first
-      "beq  a9, a8, rle_1_end\n" // rle_val == new_val skip
+      "l8ui a9, a4, 2        \n" // a8 as rle_val (#2 is first)
+"beq  a9, a8, rle_1_end      \n" // rle_val == new_val skip
 
-      "bltui a5, 128, rle_1_add \n" // if count >= 128 branch
+"bltui a5, 128, rle_1_add    \n" // if count >= 128 branch
       "rle_1_127:            \n"
-      "s8i  a8, a6, 0        \n" // *rle_buff_p = rle_val;
-      //"movi a7, 0xFF         \n" // Not needed but reduce clock on ALLOW_ZERO_RLE op 1 27219->26428
-      "s8i  a7, a6, 1        \n" // *rle_buff_p+1 = 127 as count
+#if not ALLOW_ZERO_RLE
+      "and  a8, a8, a11      \n" // a11=0x7F
+#endif
+      "s8i  a8, a6, 0        \n" // rle_buff_p = rle_val;
+      "movi a7, 0xFF         \n"
+      "s8i  a7, a6, 1        \n" // rle_buff_p+1 = 127 as count
       "addi a6, a6, 2        \n" // rle_buff_p ++2 
       "addi a5, a5, -128     \n" // count=-127
-      "bgeui a5, 128, rle_1_127 \n" // if count >= 128 branch
+"bgeui a5, 128, rle_1_127    \n" // if count >= 128 branch
 
       "rle_1_add:            \n" 
 #if ALLOW_ZERO_RLE        // 4000 to 3140 bytes & 27219 clocks
-      "s8i  a8, a6, 0        \n" // *rle_buff_p=rle_val;
-      "s8i  a5, a6, 1        \n" // *rle_buff_p+1 = count;
+      "s8i  a8, a6, 0        \n" // rle_buff_p=rle_val;
+      "s8i  a5, a6, 1        \n" // rle_buff_p+1 = count;
       "addi a6, a6, 2        \n" // rle_buff_p ++2 
 #else                        // 4000 to 1988 bytes & 34348 clocks
-      "and  a8, a8, a11      \n" // *
-      "s8i  a8, a6, 0        \n" // *rle_buff_p=rle_val;
-      "beqz a5, rle_1_skip   \n" 
-      "or   a5, a5, a10      \n" // *
-      "s8i  a5, a6, 1        \n" // *rle_buff_p+1 = count;
-      "addi a6, a6, 1        \n" // rle_buff_p --
+      "and  a8, a8, a11      \n" // a11=0x7F
+      "s8i  a8, a6, 0        \n" // rle_buff_p = rle_val & 0x7F;
+"beqz a5, rle_1_skip         \n" // if count == 0 , skip
+      "or   a5, a5, a10      \n" // a10=0x80
+      "s8i  a5, a6, 1        \n" // rle_buff_p+1 = count | 0x80;
+      "addi a6, a6, 1        \n" // rle_buff_p ++
       "rle_1_skip:           \n" 
-      "addi a6, a6, 1        \n" // rle_buff_p --
+      "addi a6, a6, 1        \n" // rle_buff_p ++
 #endif
       "mov  a8, a9           \n" // rle_val = new_val
-      "movi a5, -1           \n" // rle_counter=-1      
+      "movi a5, -1           \n" // rle_counter=-1  , will be 0 at next instruction. 
 
       "rle_1_end:            \n"
       "addi a5, a5, 1        \n" // rle_counter++
 
       "rle_2_start:          \n"
-      "l8ui a9, a4, 0        \n" // a9 as rle_val #0 is second
-      "beq  a9, a8, rle_2_end\n" // rle_val == new_val continue
+      "l8ui a9, a4, 0        \n" // a9 as rle_val (#0 is second)
+"beq  a9, a8, rle_2_end      \n" // rle_val == new_val continue
 
-      "bltui a5, 128, rle_2_add \n" // if count >= 128 branch
+"bltui a5, 128, rle_2_add    \n" // if count >= 128 branch
       "rle_2_127:            \n"
-      "s8i  a8, a6, 0        \n" // *rle_buff_p = rle_val;
-      //"movi a7, 0xFF         \n" // Not needed but reduce clock on ALLOW_ZERO_RLE op 2
-      "s8i  a7, a6, 1        \n" // *rle_buff_p+1 = 127 as count
+#if not ALLOW_ZERO_RLE
+      "and  a8, a8, a11      \n" // a11=0x7F
+#endif
+      "s8i  a8, a6, 0        \n" // rle_buff_p = rle_val;
+      "movi a7, 0xFF         \n"
+      "s8i  a7, a6, 1        \n" // rle_buff_p+1 = 127 as count
       "addi a6, a6, 2        \n" // rle_buff_p ++2 
       "addi a5, a5, -128     \n" // count=-127
-      "bgeui a5, 128, rle_2_127 \n" // if count >= 128 branch
+"bgeui a5, 128, rle_2_127    \n" // if count >= 128 branch
 
       "rle_2_add:            \n" 
 #if ALLOW_ZERO_RLE 
-      "s8i  a8, a6, 0        \n" // *rle_buff_p=rle_val;
-      "s8i  a5, a6, 1        \n" // *rle_buff_p+1 = count;
+      "s8i  a8, a6, 0        \n" // rle_buff_p=rle_val;
+      "s8i  a5, a6, 1        \n" // rle_buff_p+1 = count;
       "addi a6, a6, 2        \n" // rle_buff_p ++2 
 #else
-      "and  a8, a8, a11      \n" // *
-      "s8i  a8, a6, 0        \n" // *rle_buff_p=rle_val;
-      "beqz a5, rle_2_skip   \n"
-      "or   a5, a5, a10      \n" // *
-      "s8i  a5, a6, 1        \n" // *rle_buff_p+1 = count;
-      "addi a6, a6, 1        \n" // rle_buff_p -- 
+      "and  a8, a8, a11      \n" // a11=0x7F
+      "s8i  a8, a6, 0        \n" // rle_buff_p = rle_val & 0x7F;
+"beqz a5, rle_2_skip         \n"
+      "or   a5, a5, a10      \n" // a10=0x80
+      "s8i  a5, a6, 1        \n" // rle_buff_p+1 = count | 0x80;
+      "addi a6, a6, 1        \n" // rle_buff_p ++
       "rle_2_skip:           \n"
-      "addi a6, a6, 1        \n" // rle_buff_p -- 
+      "addi a6, a6, 1        \n" // rle_buff_p ++ 
 #endif
       "mov  a8, a9           \n" // rle_val = new_val
       "movi a5, -1           \n" // rle_counter=-1
@@ -430,30 +438,32 @@ inline void fast_rle_block_encode_asm_8bit(uint8_t *dma_buffer, int sample_size)
 
       "rle_loop_end:              \n"
 
-
-      "bltui a5, 128, rle_end_add \n" // if count >= 128 branch
+"bltui a5, 128, rle_end_add  \n" // if count >= 128 branch
       "rle_end_127:          \n"
-      "s8i  a8, a6, 0        \n" // *rle_buff_p = rle_val;
+#if not ALLOW_ZERO_RLE
+      "and  a8, a8, a11      \n" // a11=0x7F
+#endif
+      "s8i  a8, a6, 0        \n" // rle_buff_p = rle_val;
       "movi a7, 0xFF         \n"
-      "s8i  a7, a6, 1        \n" // *rle_buff_p+1 = 127 as count
+      "s8i  a7, a6, 1        \n" // rle_buff_p+1 = 127 as count
       "addi a6, a6, 2        \n" // rle_buff_p ++2 
       "addi a5, a5, -128     \n" // count=-127
- "bgeui a5, 128, rle_end_127 \n" // if count >= 128 branch
+"bgeui a5, 128, rle_end_127  \n" // if count >= 128 branch
 
       "rle_end_add:          \n" 
 #if ALLOW_ZERO_RLE 
-      "s8i  a8, a6, 0        \n" // *rle_buff_p=rle_val;
-      "s8i  a5, a6, 1        \n" // *rle_buff_p+1 = count;
+      "s8i  a8, a6, 0        \n" // rle_buff_p=rle_val;
+      "s8i  a5, a6, 1        \n" // rle_buff_p+1 = count;
       "addi a6, a6, 2        \n" // rle_buff_p ++2 
 #else
-      "and  a8, a8, a11      \n" // *
-      "s8i  a8, a6, 0        \n" // *rle_buff_p=rle_val;
-    "beqz a5, rle_end_skip   \n"
-      "or   a5, a5, a10      \n" // *
-      "s8i  a5, a6, 1        \n" // *rle_buff_p+1 = count;
-      "addi a6, a6, 1        \n" // rle_buff_p -- 
+      "and  a8, a8, a11      \n" // 
+      "s8i  a8, a6, 0        \n" // rle_buff_p=rle_val;
+"beqz a5, rle_end_skip       \n"
+      "or   a5, a5, a10      \n" // 
+      "s8i  a5, a6, 1        \n" // rle_buff_p+1 = count;
+      "addi a6, a6, 1        \n" // rle_buff_p ++ 
       "rle_end_skip:         \n"
-      "addi a6, a6, 1        \n" // rle_buff_p -- 
+      "addi a6, a6, 1        \n" // rle_buff_p ++
 #endif
 
       "exit:                 \n"
@@ -469,6 +479,7 @@ inline void fast_rle_block_encode_asm_8bit(uint8_t *dma_buffer, int sample_size)
  //   Serial_Debug_Port.printf("\r\n asm_process takes %d clocks\r\n",(clockb-clocka));
  //   Serial_Debug_Port.printf( "RX  Buffer = %d bytes\r\n", sample_size );
  //   Serial_Debug_Port.printf( "RLE Buffer = %d bytes\r\n", (rle_buff_p - rle_buff) );
+    ESP_LOGD(TAG, "RLE Buffer = %d bytes\r\n", (rle_buff_p - rle_buff) );
     
 
 /*
@@ -509,17 +520,17 @@ inline void fast_rle_block_encode_asm_16bit(uint8_t *dma_buffer, int sample_size
       "l32i a4, %0, 0        \n" // Load store dma_buffer address
       "movi a7, 0xFF         \n" // store max RLE sample
       "movi a5, 0            \n" // init rle_counter
-      "movi a10, 0x80        \n" // init rle_masks
-      "movi a11, 0x7F        \n" // init rle_masks
+      "movi a10, 0x80        \n" // init rle_masks for count
+      "movi a11, 0x7F        \n" // init rle_masks for data
       "l32i a6, %2, 0        \n" // Load store rle_buffer address
 
       "l16ui a8, a4, 2       \n" // a8 as rle_val #2 is first
       "l16ui a9, a4, 0       \n" // a9 as new_val
       "beq  a9, a8, rle_0_16 \n" // rle_val == new_val skip
 
-      "s16i  a8, a6, 0        \n" // *rle_buff_p=rle_val;
+      "s16i  a8, a6, 0       \n" // *rle_buff_p=rle_val;
       //"movi a5, 0            \n" //                        *
-      "s16i  a5, a6, 2        \n" // *rle_buff_p+2 = rle_counter; *
+      "s16i  a5, a6, 2       \n" // *rle_buff_p+2 = rle_counter; *
       "movi a5, -1           \n" // rle_counter=-1         *
       "addi a6, a6, 2        \n" // rle_buff_p ++2 
       //"addi a6, a6, 1        \n" // rle_buff_p ++
@@ -527,27 +538,27 @@ inline void fast_rle_block_encode_asm_16bit(uint8_t *dma_buffer, int sample_size
             
       "rle_0:                \n"
       "addi a5, a5, 1        \n" // rle_counter++
-   "loopnez %1, rle_loop_end_16 \n" // Prepare zero-overhead loop
+"loopnez %1, rle_loop_end_16 \n" // Prepare zero-overhead loop
       "loopStart_16:         \n"
       "addi a4, a4, 4        \n" // increase dma_buffer_p pointer by 4
 
-      "rle_1_start16:                \n"
-      "l16ui a9, a4, 2        \n" // a9 as rle_val #2 is first
-   "beq  a9, a8, rle_1_end_16\n" // rle_val == new_val skip
+      "rle_1_start16:        \n"
+      "l16ui a9, a4, 2       \n" // a9 as rle_val #2 is first
+"beq  a9, a8, rle_1_end_16   \n" // rle_val == new_val skip
 
-      "rle_1_add_16:            \n" 
+      "rle_1_add_16:         \n" 
 #if ALLOW_ZERO_RLE        // 4000 to 3140 bytes & 27219 clocks
-      "s16i  a8, a6, 0        \n" // *rle_buff_p=rle_val;
-      "s16i  a5, a6, 2        \n" // *rle_buff_p+1 = count;
+      "s16i  a8, a6, 0       \n" // *rle_buff_p=rle_val;
+      "s16i  a5, a6, 2       \n" // *rle_buff_p+1 = count;
       "addi a6, a6, 2        \n" // rle_buff_p ++2 
 #else                        // 4000 to 1988 bytes & 34348 clocks
-      "and  a8, a8, a11      \n" // *
-      "s16i  a8, a6, 0        \n" // *rle_buff_p=rle_val;
-      "beqz a5, rle_1_skip_16   \n" 
+      "and  a8, a8, a11      \n" // * 0x7F
+      "s16i  a8, a6, 0       \n"// *rle_buff_p=rle_val;
+"beqz a5, rle_1_skip_16      \n" 
       "or   a5, a5, a10      \n" // *
-      "s16i  a5, a6, 2        \n" // *rle_buff_p+1 = count;
+      "s16i  a5, a6, 2       \n"// *rle_buff_p+1 = count;
       "addi a6, a6, 1        \n" // rle_buff_p --
-      "rle_1_skip_16:           \n" 
+      "rle_1_skip_16:        \n" 
       "addi a6, a6, 1        \n" // rle_buff_p --
 #endif
       "mov  a8, a9           \n" // rle_val = new_val
@@ -556,21 +567,21 @@ inline void fast_rle_block_encode_asm_16bit(uint8_t *dma_buffer, int sample_size
       "rle_1_end:            \n"
       "addi a5, a5, 1        \n" // rle_counter++
 
-      "rle_2_start_16:          \n"
-      "l16ui a9, a4, 0        \n" // a9 as rle_val #0 is second
-      "beq  a9, a8, rle_2_end_16\n" // rle_val == new_val continue
+      "rle_2_start_16:       \n"
+      "l16ui a9, a4, 0       \n" // a9 as rle_val #0 is second
+"beq  a9, a8, rle_2_end_16   \n" // rle_val == new_val continue
 
       "rle_2_add:            \n" 
 #if ALLOW_ZERO_RLE 
-      "s16i  a8, a6, 0        \n" // *rle_buff_p=rle_val;
-      "s16i  a5, a6, 2        \n" // *rle_buff_p+1 = count;
+      "s16i  a8, a6, 0       \n" // *rle_buff_p=rle_val;
+      "s16i  a5, a6, 2       \n" // *rle_buff_p+1 = count;
       "addi a6, a6, 2        \n" // rle_buff_p ++2 
 #else
       "and  a8, a8, a11      \n" // *
-      "s16i  a8, a6, 0        \n" // *rle_buff_p=rle_val;
-      "beqz a5, rle_2_skip_16 \n"
+      "s16i  a8, a6, 0       \n" // *rle_buff_p=rle_val;
+"beqz a5, rle_2_skip_16      \n"
       "or   a5, a5, a10      \n" // *
-      "s16i  a5, a6, 2        \n" // *rle_buff_p+1 = count;
+      "s16i  a5, a6, 2       \n" // *rle_buff_p+1 = count;
       "addi a6, a6, 1        \n" // rle_buff_p -- 
       "rle_2_skip_16:        \n"
       "addi a6, a6, 1        \n" // rle_buff_p -- 
@@ -584,21 +595,21 @@ inline void fast_rle_block_encode_asm_16bit(uint8_t *dma_buffer, int sample_size
 
       "rle_end_add_16:       \n" 
 #if ALLOW_ZERO_RLE 
-      "s16i  a8, a6, 0        \n" // *rle_buff_p=rle_val;
-      "s16i  a5, a6, 1        \n" // *rle_buff_p+1 = count;
+      "s16i  a8, a6, 0       \n" // *rle_buff_p=rle_val;
+      "s16i  a5, a6, 1       \n" // *rle_buff_p+1 = count;
       "addi a6, a6, 2        \n" // rle_buff_p ++2 
 #else
       "and  a8, a8, a11      \n" // *
-      "s16i  a8, a6, 0        \n" // *rle_buff_p=rle_val;
-    "beqz a5, rle_end_skip_16   \n"
+      "s16i  a8, a6, 0       \n" // *rle_buff_p=rle_val;
+"beqz a5, rle_end_skip_16    \n"
       "or   a5, a5, a10      \n" // *
-      "s16i  a5, a6, 2        \n" // *rle_buff_p+1 = count;
+      "s16i  a5, a6, 2       \n" // *rle_buff_p+1 = count;
       "addi a6, a6, 1        \n" // rle_buff_p -- 
-      "rle_end_skip_16:         \n"
+      "rle_end_skip_16:      \n"
       "addi a6, a6, 1        \n" // rle_buff_p -- 
 #endif
 
-      "exit_16:                 \n"
+      "exit_16:              \n"
       "s32i a6, %2, 0        \n" // update rle_buff_p value
 
       :

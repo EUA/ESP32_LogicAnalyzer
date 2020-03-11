@@ -186,7 +186,6 @@ void loop()
   }
 }
 
-
 void getCmd() {
   delay(10);
   cmdBytes[0] = OLS_Port.read();
@@ -199,7 +198,6 @@ void getCmd() {
   }
   Serial_Debug_Port.println();
 }
-
 
 void get_metadata() {
   /* device name */
@@ -355,17 +353,20 @@ void captureMilli() {
      }
 */   
 
+//The buffer need to send from end to start due OLS protocol...
 #if ALLOW_ZERO_RLE
       //for( int i =  0 ;  i < readCount - rle_sample_req_count ; i++  )
       //  OLS_Port.write( 0 );
       
       for( int i =  rle_fill-2;  i>=0 ; i-=2  ){
       //for( int i =  rle_sample_req_count;  i>=0 ; i-=2  ){
-        OLS_Port.write( rle_buff[i+1] | 0x80 ) ;
-        OLS_Port.write( rle_buff[i+0] & 0x7F );
+        if( rle_buff[i+1] !=0 )
+        OLS_Port.write( rle_buff[i+1] | 0x80 ); //Count sent first
+        OLS_Port.write( rle_buff[i+0] & 0x7F ); //Value sent later
         }
 #else
-      for( int i =  (rle_buff_p - rle_buff)-1;  i>=0 ; i--  ){
+      //for( int i =  (rle_buff_p - rle_buff)-1;  i>=0 ; i--  ){
+      for( int i = rle_fill-1;  i>=0 ; i--  ){
         OLS_Port.write( rle_buff[i] );
         }
 

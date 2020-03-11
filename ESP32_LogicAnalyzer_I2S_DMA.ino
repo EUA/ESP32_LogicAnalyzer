@@ -107,7 +107,11 @@ static void IRAM_ATTR i2s_isr(void* arg) {
       if(( trigger_values & trigger_helper_1 ) || ( (trigger ^ trigger_values) & ~trigger_helper_0 ) ){
         ESP_LOGD(TAG, "DMA Triggered at desc %d (%d)",  s_state->dma_desc_triggered, s_state->dma_desc_triggered%s_state->dma_desc_count );
         if(rleEnabled){
+//#if ALLOW_ZERO_RLE
           fast_rle_block_encode_asm_8bit( (uint8_t*)s_state->dma_buf[ s_state->dma_desc_cur % s_state->dma_desc_count], s_state->dma_buf_width);
+//#else
+//          fast_rle_block_encode_asm_8bit_pp( (uint8_t*)s_state->dma_buf[ s_state->dma_desc_cur % s_state->dma_desc_count], s_state->dma_buf_width);
+//#endif
           }
         else{
           stop_at_desc= (s_state->dma_desc_cur + (readCount / (s_state->dma_buf_width/2))-1) % s_state->dma_desc_count;
