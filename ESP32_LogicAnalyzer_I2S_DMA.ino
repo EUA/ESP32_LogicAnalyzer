@@ -107,11 +107,10 @@ static void IRAM_ATTR i2s_isr(void* arg) {
       if(( trigger_values & trigger_helper_1 ) || ( (trigger ^ trigger_values) & ~trigger_helper_0 ) ){
         ESP_LOGD(TAG, "DMA Triggered at desc %d (%d)",  s_state->dma_desc_triggered, s_state->dma_desc_triggered%s_state->dma_desc_count );
         if(rleEnabled){
-//#if ALLOW_ZERO_RLE
-          fast_rle_block_encode_asm_8bit( (uint8_t*)s_state->dma_buf[ s_state->dma_desc_cur % s_state->dma_desc_count], s_state->dma_buf_width);
-//#else
-//          fast_rle_block_encode_asm_8bit_pp( (uint8_t*)s_state->dma_buf[ s_state->dma_desc_cur % s_state->dma_desc_count], s_state->dma_buf_width);
-//#endif
+          if( channels_to_read == 3 )
+              fast_rle_block_encode_asm_16bit( (uint8_t*)s_state->dma_buf[ s_state->dma_desc_cur % s_state->dma_desc_count], s_state->dma_buf_width);
+          else
+              fast_rle_block_encode_asm_8bit( (uint8_t*)s_state->dma_buf[ s_state->dma_desc_cur % s_state->dma_desc_count], s_state->dma_buf_width);
           }
         else{
           stop_at_desc= (s_state->dma_desc_cur + (readCount / (s_state->dma_buf_width/2))-1) % s_state->dma_desc_count;
@@ -129,8 +128,12 @@ static void IRAM_ATTR i2s_isr(void* arg) {
       //ESP_LOGD(TAG,"Processing DMA Desc: %d (%d)\r\n", s_state->dma_desc_cur,  s_state->dma_desc_cur % s_state->dma_desc_count);
       //Serial_Debug_Port.printf("Processing DMA Desc: %d (%d)\r\n", s_state->dma_desc_cur,  s_state->dma_desc_cur % s_state->dma_desc_count);
       Serial_Debug_Port.printf(".");
-      fast_rle_block_encode_asm_8bit( (uint8_t*)s_state->dma_buf[ s_state->dma_desc_cur % s_state->dma_desc_count], s_state->dma_buf_width);
-      //fast_rle_block_encode_asm_16bit( (uint8_t*)s_state->dma_buf[ s_state->dma_desc_cur % s_state->dma_desc_count], s_state->dma_buf_width);
+        if(rleEnabled){
+          if( channels_to_read == 3 )
+              fast_rle_block_encode_asm_16bit( (uint8_t*)s_state->dma_buf[ s_state->dma_desc_cur % s_state->dma_desc_count], s_state->dma_buf_width);
+          else
+              fast_rle_block_encode_asm_8bit( (uint8_t*)s_state->dma_buf[ s_state->dma_desc_cur % s_state->dma_desc_count], s_state->dma_buf_width);
+          }
 
       if( (rle_size - (rle_buff_p - rle_buff )) < 4000) {
         //break;
@@ -296,7 +299,7 @@ void i2s_parallel_setup(const i2s_parallel_config_t *cfg) {
   sig_data_base = I2S0I_DATA_IN0_IDX;
   sig_clk       = I2S0I_WS_IN_IDX;
   //sig_clk       = I2S0I_BCK_IN_IDX;
-   
+
   //Route the signals
   gpio_setup_in(cfg->gpio_bus[0], sig_data_base + 0, false); // D0
   gpio_setup_in(cfg->gpio_bus[1], sig_data_base + 1, false); // D1
@@ -325,11 +328,14 @@ void i2s_parallel_setup(const i2s_parallel_config_t *cfg) {
 
   // Enable and configure I2S peripheral
   periph_module_enable(PERIPH_I2S0_MODULE);
-
+  
+  
+  
   //Initialize I2S dev
   // Toggle some reset bits in LC_CONF register
   // Toggle some reset bits in CONF register
   i2s_conf_reset();
+    
   // Enable slave mode (sampling clock is external)
   I2S0.conf.rx_slave_mod = 1;
 
@@ -429,6 +435,7 @@ static void enable_out_clock( int freq_in_hz ) {
     ledcAttachPin(cfg.gpio_clk, 0);
     ledcWrite( 0, 1);
     delay(10);
+    
     /*
     esp_err_t err;
     periph_module_enable(PERIPH_LEDC_MODULE);

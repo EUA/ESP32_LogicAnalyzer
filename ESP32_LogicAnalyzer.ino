@@ -1,3 +1,4 @@
+
   /*************************************************************************
  * 
  *  ESP32 Logic Analyzer
@@ -42,22 +43,23 @@ void setup(void) {
   dma_desc_init(CAPTURE_SIZE);
 
   cfg.gpio_bus[0] = 0;
-  cfg.gpio_bus[1] = 18;//1 UART 0 RX
+  cfg.gpio_bus[1] = 18;//GPIO01 used for UART 0 RX
   cfg.gpio_bus[2] = 2;
-  cfg.gpio_bus[3] = 19;//3 UART 0 TX
+  cfg.gpio_bus[3] = 19;//GPIO03 used for UART 0 TX
   cfg.gpio_bus[4] = 4;
   cfg.gpio_bus[5] = 5;
-  cfg.gpio_bus[6] = -1;//6 bootloop SCK
-  cfg.gpio_bus[7] = -1;//7 bootloop SDO
+  cfg.gpio_bus[6] = -1;//GPIO06 used for SCK, bootloop
+  cfg.gpio_bus[7] = -1;//GPIO07 used for SDO, bootloop
 
-  cfg.gpio_bus[8] = -1;//8 bootloop SDI
-  cfg.gpio_bus[9] = 9;
-  cfg.gpio_bus[10] = 10;
-  cfg.gpio_bus[11] = -1;//11 bootloop CMD
+  cfg.gpio_bus[8] = -1;//GPIO8 used for SDI, bootloop
+  cfg.gpio_bus[9] = -1;//GPIO9 lead SW_CPU_RESET on WROOVER module
+  cfg.gpio_bus[10] = -1;//GPI10 lead SW_CPU_RESET on WROOVER module
+  cfg.gpio_bus[11] = 22;//GPIO11 used for CMD, bootloop
   cfg.gpio_bus[12] = 12;
   cfg.gpio_bus[13] = 13;
   cfg.gpio_bus[14] = 14;
   cfg.gpio_bus[15] = 15;
+
 
   cfg.gpio_clk = 23; // Pin23 used for XCK input from LedC
   cfg.bits = I2S_PARALLEL_BITS_16;
@@ -169,6 +171,7 @@ void loop()
         Serial_Debug_Port.printf("Filter %c\r\n", cmdBytes[0] & 0x02 ? 'Y' : 'N');
         channels_to_read = (~(cmdBytes[0] >> 2) & 0x0F);
         Serial_Debug_Port.printf("Channels to read: 0x%X \r\n",  channels_to_read);
+        if(channels_to_read == 3)
         Serial_Debug_Port.printf("External Clock %c\r\n", cmdBytes[0] & 0x40 ? 'Y' : 'N');
         Serial_Debug_Port.printf("inv_capture_clock %c\r\n", cmdBytes[0] & 0x80 ? 'Y' : 'N');
         break;
@@ -203,7 +206,7 @@ void get_metadata() {
   /* device name */
   OLS_Port.write((uint8_t)0x01);
   //OLS_Port.write("AGLAMv0");
-  OLS_Port.write("ESP32 Logic Analyzer v0.2");
+  OLS_Port.write("ESP32 Logic Analyzer v0.3");
   OLS_Port.write((uint8_t)0x00);
 
   /* firmware version */
@@ -353,6 +356,26 @@ void captureMilli() {
      }
 */   
 
+#if RLE_16BIT
+      int a=0;
+      Serial_Debug_Port.printf("Debug RLE BUFF:" );
+      for( int i=0; i <50 ; i++){
+        Serial_Debug_Port.printf("0x%X ", rle_buff[i] );
+        }
+      Serial_Debug_Port.printf("\r\n" );
+      
+      for( int i =  rle_fill-4;  i>=0 ; i-=4  ){
+      //for( int i =  rle_sample_req_count;  i>=0 ; i-=2  ){
+        //if( rle_buff[i+1] !=0 )
+       
+        OLS_Port.write( rle_buff[i+2] | 0x00 ); //Count sent first
+        OLS_Port.write( rle_buff[i+3] | 0x80 ); //Count sent later
+        OLS_Port.write( rle_buff[i+0] & 0xFF ); //Value sent first
+        OLS_Port.write( rle_buff[i+1] & 0x7F ); //Value sent later
+        
+    }
+#else
+
 //The buffer need to send from end to start due OLS protocol...
 #if ALLOW_ZERO_RLE
       //for( int i =  0 ;  i < readCount - rle_sample_req_count ; i++  )
@@ -371,6 +394,8 @@ void captureMilli() {
         }
 
 #endif
+
+#endif //RLE_16BIT
       
     
 /*
