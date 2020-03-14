@@ -356,14 +356,16 @@ void captureMilli() {
      }
 */   
 
-#if RLE_16BIT
+    if( channels_to_read == 3 )
+    {
       int a=0;
       Serial_Debug_Port.printf("Debug RLE BUFF:" );
       for( int i=0; i <50 ; i++){
         Serial_Debug_Port.printf("0x%X ", rle_buff[i] );
         }
       Serial_Debug_Port.printf("\r\n" );
-      
+
+#if ALLOW_ZERO_RLE
       for( int i =  rle_fill-4;  i>=0 ; i-=4  ){
       //for( int i =  rle_sample_req_count;  i>=0 ; i-=2  ){
         //if( rle_buff[i+1] !=0 )
@@ -372,10 +374,17 @@ void captureMilli() {
         OLS_Port.write( rle_buff[i+3] | 0x80 ); //Count sent later
         OLS_Port.write( rle_buff[i+0] & 0xFF ); //Value sent first
         OLS_Port.write( rle_buff[i+1] & 0x7F ); //Value sent later
-        
-    }
+        }
 #else
+      for( int i = rle_fill-2;  i>=0 ; i-=2  ){
+        OLS_Port.write( rle_buff[i] );
+        OLS_Port.write( rle_buff[i+1] );
+        }
 
+#endif
+      }
+
+      else{
 //The buffer need to send from end to start due OLS protocol...
 #if ALLOW_ZERO_RLE
       //for( int i =  0 ;  i < readCount - rle_sample_req_count ; i++  )
@@ -394,8 +403,7 @@ void captureMilli() {
         }
 
 #endif
-
-#endif //RLE_16BIT
+      }
       
     
 /*

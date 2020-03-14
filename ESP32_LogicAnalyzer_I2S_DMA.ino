@@ -107,10 +107,12 @@ static void IRAM_ATTR i2s_isr(void* arg) {
       if(( trigger_values & trigger_helper_1 ) || ( (trigger ^ trigger_values) & ~trigger_helper_0 ) ){
         ESP_LOGD(TAG, "DMA Triggered at desc %d (%d)",  s_state->dma_desc_triggered, s_state->dma_desc_triggered%s_state->dma_desc_count );
         if(rleEnabled){
-          if( channels_to_read == 3 )
-              fast_rle_block_encode_asm_16bit( (uint8_t*)s_state->dma_buf[ s_state->dma_desc_cur % s_state->dma_desc_count], s_state->dma_buf_width);
+          if( channels_to_read == 1 )
+              fast_rle_block_encode_asm_8bit_ch1( (uint8_t*)s_state->dma_buf[ s_state->dma_desc_cur % s_state->dma_desc_count], s_state->dma_buf_width);
+          else if ( channels_to_read == 2 )
+              fast_rle_block_encode_asm_8bit_ch2( (uint8_t*)s_state->dma_buf[ s_state->dma_desc_cur % s_state->dma_desc_count], s_state->dma_buf_width);
           else
-              fast_rle_block_encode_asm_8bit( (uint8_t*)s_state->dma_buf[ s_state->dma_desc_cur % s_state->dma_desc_count], s_state->dma_buf_width);
+              fast_rle_block_encode_asm_16bit( (uint8_t*)s_state->dma_buf[ s_state->dma_desc_cur % s_state->dma_desc_count], s_state->dma_buf_width);
           }
         else{
           stop_at_desc= (s_state->dma_desc_cur + (readCount / (s_state->dma_buf_width/2))-1) % s_state->dma_desc_count;
@@ -129,10 +131,12 @@ static void IRAM_ATTR i2s_isr(void* arg) {
       //Serial_Debug_Port.printf("Processing DMA Desc: %d (%d)\r\n", s_state->dma_desc_cur,  s_state->dma_desc_cur % s_state->dma_desc_count);
       Serial_Debug_Port.printf(".");
         if(rleEnabled){
-          if( channels_to_read == 3 )
-              fast_rle_block_encode_asm_16bit( (uint8_t*)s_state->dma_buf[ s_state->dma_desc_cur % s_state->dma_desc_count], s_state->dma_buf_width);
+          if( channels_to_read == 1 )
+              fast_rle_block_encode_asm_8bit_ch1( (uint8_t*)s_state->dma_buf[ s_state->dma_desc_cur % s_state->dma_desc_count], s_state->dma_buf_width);
+          else if ( channels_to_read == 2 )
+              fast_rle_block_encode_asm_8bit_ch2( (uint8_t*)s_state->dma_buf[ s_state->dma_desc_cur % s_state->dma_desc_count], s_state->dma_buf_width);
           else
-              fast_rle_block_encode_asm_8bit( (uint8_t*)s_state->dma_buf[ s_state->dma_desc_cur % s_state->dma_desc_count], s_state->dma_buf_width);
+              fast_rle_block_encode_asm_16bit( (uint8_t*)s_state->dma_buf[ s_state->dma_desc_cur % s_state->dma_desc_count], s_state->dma_buf_width);
           }
 
       if( (rle_size - (rle_buff_p - rle_buff )) < 4000) {
