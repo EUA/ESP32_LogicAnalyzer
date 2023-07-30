@@ -51,11 +51,13 @@
 
 #endif
 
+#ifdef DEBUG
 unsigned int time_debug_indice_dma[1024];
 unsigned int time_debug_indice_dma_p=0;
 
 unsigned int time_debug_indice_rle[1024];
 unsigned int time_debug_indice_rle_p=0;
+#endif
 
 int stop_at_desc=-1;
 unsigned int logicIndex = 0;
@@ -220,6 +222,8 @@ bool rle_init(void){
   rle_buff_end = rle_buff+rle_size-4;
 
   memset( rle_buff, 0x00, rle_size);
+  
+  return true;
 }
 
 void dma_serializer( dma_elem_t *dma_buffer ){
@@ -390,7 +394,9 @@ void fast_rle_block_encode_asm_8bit_ch1(uint8_t *dma_buffer, int sample_size){ /
 
       
     clockb = xthal_get_ccount();
+#ifdef DEBUG
     time_debug_indice_rle[time_debug_indice_rle_p++]=clockb;
+#endif
  //   Serial_Debug_Port.printf("\r\n asm_process takes %d clocks\r\n",(clockb-clocka));
  //   Serial_Debug_Port.printf( "RX  Buffer = %d bytes\r\n", sample_size );
  //   Serial_Debug_Port.printf( "RLE Buffer = %d bytes\r\n", (rle_buff_p - rle_buff) );
@@ -559,7 +565,9 @@ void fast_rle_block_encode_asm_8bit_ch2(uint8_t *dma_buffer, int sample_size){ /
 
       
     clockb = xthal_get_ccount();
+#ifdef DEBUG
     time_debug_indice_rle[time_debug_indice_rle_p++]=clockb;
+#endif
  //   Serial_Debug_Port.printf("\r\n asm_process takes %d clocks\r\n",(clockb-clocka));
  //   Serial_Debug_Port.printf( "RX  Buffer = %d bytes\r\n", sample_size );
  //   Serial_Debug_Port.printf( "RLE Buffer = %d bytes\r\n", (rle_buff_p - rle_buff) );
@@ -692,7 +700,9 @@ void fast_rle_block_encode_asm_16bit(uint8_t *dma_buffer, int sample_size){ //si
       :"a"(&dma_buffer), "a"(dword_count), "a"(&rle_buff_p):
       "a4","a5","a6","a7","a8","a9","a10","a11","memory");
     clockb = xthal_get_ccount();
+#ifdef DEBUG
     time_debug_indice_rle[time_debug_indice_rle_p++]=clockb;
+#endif
 
 //    delay(10);
 

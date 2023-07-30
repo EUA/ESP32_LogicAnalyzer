@@ -285,6 +285,7 @@ void captureMilli() {
   Serial_Debug_Port.printf("used_desc = %d\r\n", filled_desc);
   Serial_Debug_Port.printf("used_sample_offset = %d\r\n", filled_sample_offset);
 
+#ifdef DEBUG
   Serial_Debug_Port.printf( "\r\nDMA Times:" );
   for(int i = 0 ; i <  50 ; i++){
     Serial_Debug_Port.printf( "%u\t", time_debug_indice_dma[i]-time_debug_indice_dma[0] );
@@ -294,6 +295,8 @@ void captureMilli() {
   for(int i = 0 ; i <  50 ; i++){
     Serial_Debug_Port.printf( "%u\t", time_debug_indice_rle[i]-time_debug_indice_dma[0] );
     }
+#endif
+
   Serial_Debug_Port.printf( "\r\nDone\r\n" );
   Serial_Debug_Port.flush();
   filled_desc--;
