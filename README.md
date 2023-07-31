@@ -57,9 +57,11 @@ This project steals some code from [esp32-cam-demo](https://github.com/igrr/esp3
     #endif
     ```
 3. Build the project and flash with PlatformIO
-4. After the firmware is uploaded, open PulseView, follow the settings in the figure
+4. Connect PIN15 to GND (This is to disable boot messages, or PulseView cannot detect this device, probably related to [this issue](https://github.com/EUA/ESP32_LogicAnalyzer/issues/1#issuecomment-582195593))
+5. After PIN15 is connected to GND, open PulseView, follow the settings in the figure
   ![image](https://github.com/CW-B-W/ESP32_LogicAnalyzer/assets/76680670/b571412e-4b85-43b3-980c-3df5d2544d7c)
-5. Make sure the # of samples is at least 2K samples (or ESP32 will not respond), and run.
+6. Make sure the # of samples is at least 2K samples (or ESP32 will not respond), and run.
+  ![image](https://github.com/CW-B-W/ESP32_LogicAnalyzer/assets/76680670/b26a0c52-d383-46fc-9278-f6ccbfa038ed)
 
 ## PulseView Channel -> ESP32 PIN
 
