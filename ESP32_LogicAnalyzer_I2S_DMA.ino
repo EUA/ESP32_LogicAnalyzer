@@ -9,10 +9,12 @@ void start_dma_capture(void) {
   s_state->dma_filtered_count = 0;
   s_state->dma_desc_triggered = 0;
 
+#ifdef DEBUG
 time_debug_indice_dma_p=0;
 time_debug_indice_rle_p=0;
 for(int i=0; i < 1024 ; i++ )
 time_debug_indice_dma[i]=time_debug_indice_rle[i]=0;
+#endif
 
   ESP_ERROR_CHECK(esp_intr_disable(s_state->i2s_intr_handle));
   i2s_conf_reset();
@@ -92,7 +94,9 @@ static void IRAM_ATTR i2s_isr(void* arg) {
   //gpio_set_level(, 1); //Should show a pulse on the logic analyzer when an interrupt occurs
   //gpio_set_level(, 0);
   if(I2S0.int_raw.in_done){ //filled desc
+#ifdef DEBUG
     time_debug_indice_dma[time_debug_indice_dma_p++]=xthal_get_ccount();
+#endif
     
     //Serial_Debug_Port.printf("DMA INT Number %d Status 0x%xX\r\n", s_state->dma_desc_cur, I2S0.int_raw.val);
     
