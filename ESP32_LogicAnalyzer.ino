@@ -35,6 +35,7 @@ void setup(void) {
   #ifdef _DEBUG_MODE_
   Serial_Debug_Port.begin(Serial_Debug_Port_Baud);
   #endif
+  
   OLS_Port.begin(OLS_Port_Baud);
 
   //Using for development
@@ -47,17 +48,17 @@ void setup(void) {
 
   dma_desc_init(CAPTURE_SIZE);
 
-  cfg.gpio_bus[0] = 0;
-  cfg.gpio_bus[1] = 25;//GPIO01 used for UART 0 RX
-  cfg.gpio_bus[2] = 2;
-  cfg.gpio_bus[3] = 26;//GPIO03 used for UART 0 TX
-  cfg.gpio_bus[4] = 4;
-  cfg.gpio_bus[5] = 5;
-  cfg.gpio_bus[6] = 16;//GPIO06 used for SCK, bootloop
-  cfg.gpio_bus[7] = 17;//GPIO07 used for SDO, bootloop
+  cfg.gpio_bus[0]  = 0;
+  cfg.gpio_bus[1]  = 32;//GPIO01 used for UART 0 RX, able to use it if you select different UART port (1,2) as OLS_Port
+  cfg.gpio_bus[2]  = 2;
+  cfg.gpio_bus[3]  = 33;//GPIO03 used for UART 0 TX
+  cfg.gpio_bus[4]  = 4;
+  cfg.gpio_bus[5]  = 5;
+  cfg.gpio_bus[6]  = 26; //GPIO06 used for SCK, bootloop, //GPIO16 is UART2 RX 
+  cfg.gpio_bus[7]  = 27; //GPIO07 used for SDO, bootloop  //GPIO17 is UART2 TX
 
-  cfg.gpio_bus[8] = 18;//GPIO8 used for SDI, bootloop
-  cfg.gpio_bus[9] = 19;//GPIO9 lead SW_CPU_RESET on WROOVER module
+  cfg.gpio_bus[8]  = 18;//GPIO8 used for SDI, bootloop
+  cfg.gpio_bus[9]  = 19;//GPIO9 lead SW_CPU_RESET on WROOVER module
   cfg.gpio_bus[10] = 20;//GPI10 lead SW_CPU_RESET on WROOVER module
   cfg.gpio_bus[11] = 21;//GPIO11 used for CMD, bootloop
   cfg.gpio_bus[12] = 12;
@@ -68,10 +69,10 @@ void setup(void) {
   cfg.gpio_clk_out= 23; // Pin22 used for LedC output
   cfg.gpio_clk_in = 22; // Pin23 used for XCK input from LedC
   
-  //pin24 result bootloop
+  //GPIO 24,28,29,30,31 results bootloop
     
-  cfg.bits = I2S_PARALLEL_BITS_8; //not implemented yet...
-  //cfg.bits = I2S_PARALLEL_BITS_16;
+  //cfg.bits = I2S_PARALLEL_BITS_8; //not implemented yet...
+  cfg.bits = I2S_PARALLEL_BITS_16;
   cfg.clkspeed_hz = 2 * 1000 * 1000; //resulting pixel clock = 1MHz
   cfg.buf = &bufdesc;
 
@@ -301,7 +302,7 @@ void captureMilli() {
 
   digitalWrite( ledPin, LOW );
   #ifdef _DEBUG_MODE_
-  Serial_Debug_Port.printf("ReadCount:  %d\r\n",readCount);
+  Serial_Debug_Port.printf("ReadCount:  %d complete\r\n",readCount);
   Serial_Debug_Port.printf("DMA Desc Current: %d\r\n",  s_state->dma_desc_cur);
   #endif
   ESP_LOGD(TAG, "Copying buffer.");
@@ -496,6 +497,11 @@ void captureMilli() {
         cur = s_state->dma_buf[ (j
                                 +s_state->dma_desc_triggered
                                 +s_state->dma_desc_count) % s_state->dma_desc_count][i];
+        
+        //uint8_t* cx = (uint8_t*)&cur.val;
+        //ESP_LOGD(TAG, "cur [0-4]    %02X %02X %02X %02X", cx[0],cx[1],cx[2],cx[3] );
+        //ESP_LOGD(TAG, "cur u1s1u2s2 %02X %02X %02X %02X", cur.unused1,cur.sample1,cur.unused2,cur.sample2 );
+        
         if (channels_to_read == 1) {
           OLS_Port.write(cur.sample2);
           OLS_Port.write(cur.sample1);

@@ -4,7 +4,6 @@ static const char* TAG = "esp32la";
 
 #include <stdint.h>
 #include "soc/i2s_struct.h"
-//#include "config.h"
 #include "rom/lldesc.h"
 #include "soc/i2s_struct.h"
 #include "soc/i2s_reg.h"
@@ -17,14 +16,13 @@ static const char* TAG = "esp32la";
 
 
 #define OLS_Port Serial //Serial //Serial1 //Serial2
-#define OLS_Port_Baud 921600 //921600 //115200 // 3000000 
+#define OLS_Port_Baud 921600 //115200 // 3e6
 
-#define _DEBUG_MODE_s
+#define _DEBUG_MODE_x
 
 #ifdef _DEBUG_MODE_
 #define Serial_Debug_Port Serial2 //Serial1 //Serial2
-//#define Serial_Debug_Port_Baud 921600 //115200
-#define Serial_Debug_Port_Baud 2e6 //115200
+#define Serial_Debug_Port_Baud 921600 //115200
 #endif
 
 #define ALLOW_ZERO_RLE 0
@@ -97,8 +95,6 @@ static i2s_parallel_state_t* i2s_state[2] = {NULL, NULL};
 
 #define DMA_MAX (4096-4)
 
-
-
 //Calculate the amount of dma descs needed for a buffer desc
 static int calc_needed_dma_descs_for(i2s_parallel_buffer_desc_t *desc) {
   int ret = (desc->size + DMA_MAX - 1) / DMA_MAX;
@@ -120,18 +116,23 @@ typedef union {
 } dma_elem_t;
 
 typedef enum {
+    SM_0A0B_0B0C = 0,
     /* camera sends byte sequence: s1, s2, s3, s4, ...
      * fifo receives: 00 s1 00 s2, 00 s2 00 s3, 00 s3 00 s4, ...
      */
-    SM_0A0B_0B0C = 0,
-    /* camera sends byte sequence: s1, s2, s3, s4, ...
-     * fifo receives: 00 s1 00 s2, 00 s3 00 s4, ...
-     */
+    
     SM_0A0B_0C0D = 1,
+    /* camera sends byte sequence: s1, s2, s3, s4, ...
+     * fifo receives: 00 s1 00 s2, 00 s3 00 s4, .
+     * 
+     * but appears as 00 s2 00 s1, 00 s4 00 s3 at DMA buffer somehow...
+     * 
+     */
+    
+    SM_0A00_0B00 = 3,
     /* camera sends byte sequence: s1, s2, s3, s4, ...
      * fifo receives: 00 s1 00 00, 00 s2 00 00, 00 s3 00 00, ...
      */
-    SM_0A00_0B00 = 3,
 } i2s_sampling_mode_t;
 
 typedef struct {
@@ -158,11 +159,6 @@ typedef struct {
 camera_state_t *s_state;
 
 void i2s_parallel_setup( const i2s_parallel_config_t *cfg);
-
-
-#define USE_TX2_FOR_OLS
-
-#define CHANPIN GPIO.in
 
 uint8_t channels_to_read=3;
 /* XON/XOFF are not supported. */
@@ -200,13 +196,13 @@ uint8_t channels_to_read=3;
 
 #define MAX_CAPTURE_SIZE CAPTURE_SIZE
 
-int8_t rle_process=-1;
-uint8_t rle_buff [rle_size];
-uint8_t* rle_buff_p;
-uint8_t* rle_buff_end;
-uint8_t rle_sample_counter;
-uint32_t rle_total_sample_counter;
-uint8_t rle_value_holder;
+int8_t    rle_process=-1;
+uint8_t   rle_buff [rle_size];
+uint8_t*  rle_buff_p;
+uint8_t*  rle_buff_end;
+uint8_t   rle_sample_counter;
+uint32_t  rle_total_sample_counter;
+uint8_t   rle_value_holder;
 
 bool rle_init(void){
   rle_buff_p=0;
@@ -219,17 +215,18 @@ bool rle_init(void){
   rle_buff_end = rle_buff+rle_size-4;
 
   memset( rle_buff, 0x00, rle_size);
-  
   return true;
 }
 
 void dma_serializer( dma_elem_t *dma_buffer ){
+  //00,s1,00,s2,00,s3,00,s4
   for ( int i = 0 ; i < s_state->dma_buf_width/4 ; i++ ){
      uint8_t y =  dma_buffer[i].sample2;
      dma_buffer[i].sample2 = dma_buffer[i].sample1;
      dma_buffer[i].sample1 = y;
    }
 }
+
 void fast_rle_block_encode_asm_8bit_ch1(uint8_t *dma_buffer, int sample_size){ //size, not count
    uint8_t *desc_buff_end=dma_buffer;
    unsigned clocka=0,clockb=0;
@@ -248,7 +245,9 @@ void fast_rle_block_encode_asm_8bit_ch1(uint8_t *dma_buffer, int sample_size){ /
    clocka = xthal_get_ccount();
    
    /* No, Assembly is not that hard. You are just too lazzy. */
-
+   
+   // "a4"=&dma_buffer, "a5"=dword_count, "a6"=&rle_buff_p:
+   
     __asm__ __volatile__(
       "memw \n"
       "l32i a4, %0, 0        \n" // Load store dma_buffer address
@@ -581,8 +580,8 @@ void fast_rle_block_encode_asm_16bit(uint8_t *dma_buffer, int sample_size){ //si
     * for capture 20Mhz sampling speed.
     */
 
-   /* expected structure of DMA memory    : 00s1,00s2,00s3,00s4
-    * actual data structure of DMA memory : 00s2,00s1,00s4,00s3
+   /* expected structure of DMA memory    : S1s1,S2s2,S3s3,S4s4
+    * actual data structure of DMA memory : S2s2,S1s1,S4s4,S3s3
     */
     
    int dword_count=(sample_size/4) -1;
@@ -594,22 +593,22 @@ void fast_rle_block_encode_asm_16bit(uint8_t *dma_buffer, int sample_size){ //si
     __asm__ __volatile__(
       "l32i a4, %0, 0        \n" // Load store dma_buffer address
       "l32i a6, %2, 0        \n" // Load store rle_buffer address
-      "l16ui a8, a4, 2       \n" // a8 as rle_val #2 is first
-      "l16ui a9, a4, 0       \n" // a9 as new_val
+      "l16ui a8, a4, 2       \n" // a8 as rle_val #2 is first   a8=&(dma_buffer+2)
+      "l16ui a9, a4, 0       \n" // a9 as new_val               a9=&dma_buffer
       "movi a7, 0xFF         \n" // store max RLE sample
       "movi a5, 0            \n" // init rle_counter
-      "movi a10, 0x8000        \n" // init rle_masks for count
-      "movi a11, 0x7FFF        \n" // init rle_masks for data
+      "movi a10, 0x8000      \n" // init rle_masks for count
+      "movi a11, 0x7FFF      \n" // init rle_masks for data
 
 "beq  a9, a8, rle_0_16       \n" // rle_val == new_val skip
 
 #if not ALLOW_ZERO_RLE
       "and  a8, a8, a11      \n" // a11=0x7FFF
 #endif
-      "s16i  a8, a6, 0        \n" // rle_buff_p=rle_val;
+      "s16i  a8, a6, 0       \n" // rle_buff_p=rle_val;
 #if ALLOW_ZERO_RLE
-      "s16i  a5, a6, 2        \n" // rle_buff_p+2 = rle_counter //not needed
-      "addi a6, a6, 2        \n" // rle_buff_p +=2              //not needed
+      "s16i  a5, a6, 2       \n" // rle_buff_p+2 = rle_counter //not needed
+      "addi a6, a6, 2        \n" // rle_buff_p +=2             //not needed
 #endif
       "movi a5, -1           \n" // rle_counter=-1
       "addi a6, a6, 2        \n" // rle_buff_p +=2 

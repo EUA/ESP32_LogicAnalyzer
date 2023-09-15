@@ -29,6 +29,7 @@ time_debug_indice_dma[i]=time_debug_indice_rle[i]=0;
   ESP_LOGD(TAG, "DMA Tigger : 0x%X", trigger );
   if (trigger || rleEnabled) {
     stop_at_desc = -1;
+    //Due waiting trigger, we continuously capturing, so we can't set rx_eof_num
     I2S0.rx_eof_num = s_state->dma_buf_width;
     I2S0.int_ena.in_suc_eof = 0;
     I2S0.int_ena.rx_take_data = 0;
@@ -38,9 +39,10 @@ time_debug_indice_dma[i]=time_debug_indice_rle[i]=0;
   }
   else {
     s_state->dma_desc_triggered=-1;
-    I2S0.rx_eof_num = readCount/2;
+    I2S0.rx_eof_num = readCount/2; // why /2 ???
     I2S0.int_ena.in_suc_eof = 1;
     I2S0.int_ena.rx_take_data = 1;
+    //
     lldesc_t* pd = &s_state->dma_desc[s_state->dma_desc_count - 1];
     pd->eof = 1;
     pd->qe.stqe_next = 0x0;
