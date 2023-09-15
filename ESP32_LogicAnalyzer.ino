@@ -307,7 +307,7 @@ void captureMilli() {
   #endif
   ESP_LOGD(TAG, "Copying buffer.");
 
-  int filled_desc = ((readCount/2) / s_state->dma_sample_per_desc);
+  int filled_desc = ((readCount/2) / s_state->dma_sample_per_desc) + 1;
   int filled_sample_offset = ((readCount/2) % s_state->dma_sample_per_desc); //((readCount - 1) % s_state->dma_val_per_desc) % s_state->dma_sample_per_desc;
   int filled_full_sample_offset = s_state->dma_sample_per_desc;
   int tx_count = 0;

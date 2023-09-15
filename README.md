@@ -29,5 +29,4 @@ This project steals some code from [esp32-cam-demo](https://github.com/igrr/esp3
 3. Build the project and flash with PlatformIO
 4. Connect cfg.gpio_clk_in (default pin23 )and cfg.gpio_clk_out (default pin22).
 5. Open PulseView with `pulseview -D -d ols:conn=/dev/ttyUSB0::serialcomm=921600/8n1`  ,or from gui, connect device and select Openbench Logic Sniffer & SUMP compatibles (ols)
-6. Make sure the # of samples is at least 2K samples (or ESP32 will not respond), and run.
-7. Channels vs PINS are also available at setup() function. You can also change ports/baud from ESP32_LogicAnalyzer.h file. Please check it out before use.
+6. Channels vs PINS are also available at setup() function. You can also change ports/baud from ESP32_LogicAnalyzer.h file. Please check it out before use.
