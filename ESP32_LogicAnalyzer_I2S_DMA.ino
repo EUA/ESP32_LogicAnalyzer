@@ -133,7 +133,7 @@ static void IRAM_ATTR i2s_isr(void* arg) {
     else if(rleEnabled){
       //ESP_LOGD(TAG,"Processing DMA Desc: %d (%d)\r\n", s_state->dma_desc_cur,  s_state->dma_desc_cur % s_state->dma_desc_count);
       //Serial_Debug_Port.printf("Processing DMA Desc: %d (%d)\r\n", s_state->dma_desc_cur,  s_state->dma_desc_cur % s_state->dma_desc_count);
-      Serial_Debug_Port.printf(".");
+      //Serial_Debug_Port.printf(".");
         if(rleEnabled){
           if( channels_to_read == 1 )
               fast_rle_block_encode_asm_8bit_ch1( (uint8_t*)s_state->dma_buf[ s_state->dma_desc_cur % s_state->dma_desc_count], s_state->dma_buf_width);
@@ -327,7 +327,7 @@ void i2s_parallel_setup(const i2s_parallel_config_t *cfg) {
   gpio_setup_in(cfg->gpio_bus[14], sig_data_base + 14, false); // VS
   gpio_setup_in(cfg->gpio_bus[15], sig_data_base + 15, false); // VS
 
-  gpio_setup_in(cfg->gpio_clk, sig_clk, false);
+  gpio_setup_in(cfg->gpio_clk_in, sig_clk, false);
 //gpio_matrix_in(0x38,    I2S0I_WS_IN_IDX, false);
 
   gpio_matrix_in(0x38,    I2S0I_V_SYNC_IDX, false);
@@ -399,7 +399,8 @@ void i2s_parallel_setup(const i2s_parallel_config_t *cfg) {
   I2S0.sample_rate_conf.val = 0;
   // Clear flags which are used in I2S serial mode
   //I2S0.sample_rate_conf.rx_bits_mod = 8;
-  I2S0.sample_rate_conf.rx_bits_mod = 16;
+  //I2S0.sample_rate_conf.rx_bits_mod = 16;
+  I2S0.sample_rate_conf.rx_bits_mod = cfg->bits;
   //dev->sample_rate_conf.rx_bck_div_num = 16; //ToDo: Unsure about what this does...
   I2S0.sample_rate_conf.rx_bck_div_num = 1;  // datasheet says this must be 2 or greater (but 1 seems to work)
   
@@ -440,7 +441,8 @@ void i2s_parallel_setup(const i2s_parallel_config_t *cfg) {
 
 static void enable_out_clock( int freq_in_hz ) {
     ledcSetup(0, freq_in_hz, 1);
-    ledcAttachPin(cfg.gpio_clk, 0);
+    //ledcAttachPin(cfg.gpio_clk_in, 0); //Not work anymore!
+    ledcAttachPin(cfg.gpio_clk_out, 0); 
     ledcWrite( 0, 1);
     delay(10);
     

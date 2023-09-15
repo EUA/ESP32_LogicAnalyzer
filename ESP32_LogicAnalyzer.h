@@ -1,3 +1,6 @@
+#define DEBUGx
+
+static const char* TAG = "esp32la";
 
 #include <stdint.h>
 #include "soc/i2s_struct.h"
@@ -10,10 +13,19 @@
 #include "esp_heap_caps.h"
 #include "esp_system.h"
 #include "esp_task_wdt.h"
-
 #include "driver/ledc.h"
 
-#define USE_SERIAL2_FOR_OLS 1 // If 1, UART2 = OLS and UART0=Debug
+
+#define OLS_Port Serial //Serial //Serial1 //Serial2
+#define OLS_Port_Baud 921600 //921600 //115200 // 3000000 
+
+#define _DEBUG_MODE_s
+
+#ifdef _DEBUG_MODE_
+#define Serial_Debug_Port Serial2 //Serial1 //Serial2
+//#define Serial_Debug_Port_Baud 921600 //115200
+#define Serial_Debug_Port_Baud 2e6 //115200
+#endif
 
 #define ALLOW_ZERO_RLE 0
 
@@ -32,24 +44,6 @@
 #define rle_size 96000
 
 #define ledPin 21 //Led on while running and Blinks while transfering data.
-
-#if USE_SERIAL2_FOR_OLS
-
-#define Serial_Debug_Port Serial
-//#define Serial_Debug_Port_Baud 115200
-#define Serial_Debug_Port_Baud 921600
-//#define Serial_Debug_Port_Baud 1000000
-#define OLS_Port Serial2
-#define OLS_Port_Baud 3000000
-
-#else
-
-#define Serial_Debug_Port Serial2
-#define Serial_Debug_Port_Baud 921600
-#define OLS_Port Serial
-#define OLS_Port_Baud 921600
-
-#endif
 
 #ifdef DEBUG
 unsigned int time_debug_indice_dma[1024];
@@ -72,6 +66,7 @@ unsigned long divider = 0;
 boolean rleEnabled = 0;
 uint32_t clock_per_read = 0;
 
+
 typedef enum {
   I2S_PARALLEL_BITS_8   = 8,
   I2S_PARALLEL_BITS_16  = 16,
@@ -84,8 +79,10 @@ typedef struct {
 } i2s_parallel_buffer_desc_t;
 
 typedef struct {
-  int gpio_bus[24];
-  int gpio_clk;
+  int8_t gpio_bus[16];
+  int8_t gpio_clk_in;
+  int8_t gpio_clk_out;
+  
   int clkspeed_hz;
   i2s_parallel_cfg_bits_t bits;
   i2s_parallel_buffer_desc_t* buf;
