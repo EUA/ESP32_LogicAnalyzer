@@ -248,7 +248,7 @@ void get_metadata() {
   OLS_Port.write((uint8_t) (capture_size >> 0) & 0xFF);
 
   /* sample rate (20MHz) */
-  uint32_t capture_speed = 200000000;
+  uint32_t capture_speed = 20e6;
   OLS_Port.write((uint8_t)0x23);
   OLS_Port.write((uint8_t) (capture_speed >> 24) & 0xFF);
   OLS_Port.write((uint8_t) (capture_speed >> 16) & 0xFF);

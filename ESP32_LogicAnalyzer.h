@@ -4,7 +4,7 @@ static const char* TAG = "esp32la";
 
 #include <stdint.h>
 #include "soc/i2s_struct.h"
-#include "config.h"
+//#include "config.h"
 #include "rom/lldesc.h"
 #include "soc/i2s_struct.h"
 #include "soc/i2s_reg.h"
