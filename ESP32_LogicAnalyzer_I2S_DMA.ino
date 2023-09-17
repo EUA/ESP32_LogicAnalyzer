@@ -9,12 +9,11 @@ void start_dma_capture(void) {
   s_state->dma_filtered_count = 0;
   s_state->dma_desc_triggered = 0;
 
-#ifdef DEBUG
 time_debug_indice_dma_p=0;
 time_debug_indice_rle_p=0;
-for(int i=0; i < 1024 ; i++ )
+for(int i=0; i < time_debug_indice_lenght; i++ )
 time_debug_indice_dma[i]=time_debug_indice_rle[i]=0;
-#endif
+
 
   ESP_ERROR_CHECK(esp_intr_disable(s_state->i2s_intr_handle));
   i2s_conf_reset();
@@ -56,7 +55,9 @@ time_debug_indice_dma[i]=time_debug_indice_rle[i]=0;
   ESP_ERROR_CHECK(esp_intr_enable(s_state->i2s_intr_handle));
 
   //attachInterrupt(0, i2s_trigger_isr, RISING);
-  I2S0.conf.rx_start = 1;
+  
+  //taskENTER_CRITICAL(&myMutex);
+  //I2S0.conf.rx_start = 1;
 }
 
 uint16_t buff_process_trigger_1(uint16_t *buff, int size, bool printit=true){
@@ -79,7 +80,7 @@ uint16_t buff_process_trigger_0(uint16_t *buff, int size, bool printit=true){
 
 static void IRAM_ATTR i2s_isr(void* arg) {
   if(trigger==0){
-    ESP_LOGD(TAG, "DMA INT Number %d Status 0x%x", s_state->dma_desc_cur, I2S0.int_raw.val );
+    //ESP_LOGD(TAG, "DMA INT Number %d Status 0x%x", s_state->dma_desc_cur, I2S0.int_raw.val );
   
   /*
   ESP_LOGD(TAG, "DMA INT take_data? %d", I2S0.int_raw.rx_take_data );
@@ -96,10 +97,16 @@ static void IRAM_ATTR i2s_isr(void* arg) {
   //gpio_set_level(, 1); //Should show a pulse on the logic analyzer when an interrupt occurs
   //gpio_set_level(, 0);
   if(I2S0.int_raw.in_done){ //filled desc
-#ifdef DEBUG
-    time_debug_indice_dma[time_debug_indice_dma_p++]=xthal_get_ccount();
-#endif
+    if(time_debug_indice_dma_p < time_debug_indice_lenght) time_debug_indice_dma[time_debug_indice_dma_p++]=xthal_get_ccount();
     
+    //if(channels_to_read==1)
+    //  dmabuff_compresser_ch1( (uint8_t*)s_state->dma_buf[ s_state->dma_desc_cur % s_state->dma_desc_count] );
+    //else if(channels_to_read==2)
+    //  dmabuff_compresser_ch2( (uint8_t*)s_state->dma_buf[ s_state->dma_desc_cur % s_state->dma_desc_count] );
+    
+    if(time_debug_indice_dma_p < time_debug_indice_lenght) time_debug_indice_rle[time_debug_indice_rle_p++]=xthal_get_ccount();
+      
+            
     //Serial_Debug_Port.printf("DMA INT Number %d Status 0x%xX\r\n", s_state->dma_desc_cur, I2S0.int_raw.val);
     
     if(trigger && (stop_at_desc==-1)){
@@ -133,7 +140,7 @@ static void IRAM_ATTR i2s_isr(void* arg) {
         }
       }
     else if(rleEnabled){
-      //ESP_LOGD(TAG,"Processing DMA Desc: %d (%d)\r\n", s_state->dma_desc_cur,  s_state->dma_desc_cur % s_state->dma_desc_count);
+      ESP_LOGD(TAG,"Processing DMA Desc: %d (%d)\r\n", s_state->dma_desc_cur,  s_state->dma_desc_cur % s_state->dma_desc_count);
       //Serial_Debug_Port.printf("Processing DMA Desc: %d (%d)\r\n", s_state->dma_desc_cur,  s_state->dma_desc_cur % s_state->dma_desc_count);
       //Serial_Debug_Port.printf(".");
         if(rleEnabled){
@@ -143,6 +150,9 @@ static void IRAM_ATTR i2s_isr(void* arg) {
               fast_rle_block_encode_asm_8bit_ch2( (uint8_t*)s_state->dma_buf[ s_state->dma_desc_cur % s_state->dma_desc_count], s_state->dma_buf_width);
           else
               fast_rle_block_encode_asm_16bit( (uint8_t*)s_state->dma_buf[ s_state->dma_desc_cur % s_state->dma_desc_count], s_state->dma_buf_width);
+          
+          if(time_debug_indice_rle_p < time_debug_indice_lenght)
+            time_debug_indice_rle[time_debug_indice_rle_p++]=xthal_get_ccount();
           }
 
       if( (rle_size - (rle_buff_p - rle_buff )) < 4000) {
@@ -162,8 +172,7 @@ static void IRAM_ATTR i2s_isr(void* arg) {
       }
     s_state->dma_desc_cur++;
     }
-
-    
+  
   if(trigger==0)  //Not stop while not triggered.
   if(
     //I2S0.int_raw.in_dscr_empty ||
@@ -186,7 +195,7 @@ static void IRAM_ATTR i2s_isr(void* arg) {
       I2S0.conf.rx_start = 0;
       s_state->dma_done = true;
    }
- 
+  //vTaskDelay(1);
   I2S0.int_clr.val = I2S0.int_raw.val;   
   }
 
@@ -221,7 +230,7 @@ static esp_err_t dma_desc_init(int raw_byte_size){
 */
     s_state->dma_buf_width = buf_size = 4000;
     s_state->dma_val_per_desc = 2000;
-    s_state->dma_sample_per_desc = 1000;
+    s_state->dma_sample_per_desc = 1000; //4bytes has only 2bytes sample on 16bit mode.
     s_state->dma_desc_count = dma_desc_count = raw_byte_size/4000;
     
     ESP_LOGD(TAG, "DMA buffer size: %d", buf_size);
@@ -346,25 +355,16 @@ void i2s_parallel_setup(const i2s_parallel_config_t *cfg) {
   // Toggle some reset bits in CONF register
   i2s_conf_reset();
     
-  // Enable slave mode (sampling clock is external)
-  I2S0.conf.rx_slave_mod = 1;
-
-  //Enable LCD mode
-  I2S0.conf2.val = 0;
-
-  // Enable parallel mode
-  I2S0.conf2.lcd_en = 1;
-  
-  // Use HSYNC/VSYNC/HREF to control sampling
-  I2S0.conf2.camera_en = 1;
+  I2S0.conf.rx_slave_mod = 1;  // Enable slave mode (sampling clock is external)
+  I2S0.conf2.val = 0;          // Enable LCD mode
+  I2S0.conf2.lcd_en = 1;       // Enable parallel mode
+  I2S0.conf2.camera_en = 1;    // Use HSYNC/VSYNC/HREF to control sampling
 
   // f i2s = fpll / (Num + b/a )) where fpll=80Mhz
-  // Configure clock divider
-  I2S0.clkm_conf.val = 0;
+  I2S0.clkm_conf.val = 0;       // Configure clock divider
 
-  I2S0.clkm_conf.clka_en = 0;    // select PLL_D2_CLK. Digital Multiplexer that select between APLL_CLK or PLL_D2_CLK.
+  I2S0.clkm_conf.clka_en = 0;   // select PLL_D2_CLK. Digital Multiplexer that select between APLL_CLK or PLL_D2_CLK.
   //I2S0.clkm_conf.clk_en = 1;
-  
   
   I2S0.clkm_conf.clkm_div_a = 1;
   I2S0.clkm_conf.clkm_div_b = 0;
@@ -376,12 +376,11 @@ void i2s_parallel_setup(const i2s_parallel_config_t *cfg) {
   I2S0.clkm_conf.clkm_div_num = 3;
   */
   
-  // FIFO will sink data to DMA
-  I2S0.fifo_conf.dscr_en = 1;
+  I2S0.fifo_conf.dscr_en = 1;   // FIFO will sink data to DMA
   
   // FIFO configuration
   //I2S0.fifo_conf.rx_fifo_mod = s_state->sampling_mode;
-  I2S0.fifo_conf.rx_fifo_mod = 1;// SM_0A0B_0C0D = 1,
+  I2S0.fifo_conf.rx_fifo_mod = 1; // SM_0A0B_0C0D = 1,
   I2S0.fifo_conf.rx_fifo_mod_force_en = 1;
   //dev->conf_chan.val = 0;
   I2S0.conf_chan.rx_chan_mod = 1;
@@ -441,37 +440,13 @@ void i2s_parallel_setup(const i2s_parallel_config_t *cfg) {
 //  I2S0.conf.rx_start = 1;
 }
 
-static void enable_out_clock( int freq_in_hz ) {
+#include "driver/ledc.h"
+#include "driver/periph_ctrl.h"
+
+static void enable_out_clock( uint32_t freq_in_hz ) {
     ledcSetup(0, freq_in_hz, 1);
     //ledcAttachPin(cfg.gpio_clk_in, 0); //Not work anymore!
     ledcAttachPin(cfg.gpio_clk_out, 0); 
     ledcWrite( 0, 1);
     delay(10);
-    
-    /*
-    esp_err_t err;
-    periph_module_enable(PERIPH_LEDC_MODULE);
-    ledc_timer_config_t timer_conf;
-    timer_conf.bit_num = LEDC_TIMER_1_BIT;
-    //timer_conf.freq_hz = I2S_HZ;
-    timer_conf.freq_hz = freq_in_hz;
-    timer_conf.speed_mode = LEDC_HIGH_SPEED_MODE;
-    timer_conf.timer_num = LEDC_TIMER_0;
-    err = ledc_timer_config(&timer_conf);
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "ledc_timer_config failed, rc=%x", err);
-    }
-
-    ledc_channel_config_t ch_conf;
-    ch_conf.channel = LEDC_CHANNEL_0;
-    ch_conf.timer_sel = LEDC_TIMER_0;
-    ch_conf.intr_type = LEDC_INTR_DISABLE;
-    ch_conf.duty = 1;
-    ch_conf.speed_mode = LEDC_HIGH_SPEED_MODE;
-    ch_conf.gpio_num = 23; //s_config.pin_xclk; 
-    err = ledc_channel_config(&ch_conf);
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "ledc_channel_config failed, rc=%x", err);
-    }
-    */
 }

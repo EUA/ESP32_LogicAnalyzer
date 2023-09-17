@@ -1,5 +1,3 @@
-#define DEBUGx
-
 static const char* TAG = "esp32la";
 
 #include <stdint.h>
@@ -15,13 +13,19 @@ static const char* TAG = "esp32la";
 #include "driver/ledc.h"
 
 
-#define OLS_Port Serial //Serial //Serial1 //Serial2
+
+#define _DEBUG_MODE_
+
+#ifndef _DEBUG_MODE_
+
+#define OLS_Port Serial      //Serial //Serial1 //Serial2
 #define OLS_Port_Baud 921600 //115200 // 3e6
 
-#define _DEBUG_MODE_x
+#else
+#define OLS_Port Serial2     //Serial //Serial1 //Serial2
+#define OLS_Port_Baud 3e6    //115200 // 3e6
 
-#ifdef _DEBUG_MODE_
-#define Serial_Debug_Port Serial2 //Serial1 //Serial2
+#define Serial_Debug_Port Serial //Serial1 //Serial2
 #define Serial_Debug_Port_Baud 921600 //115200
 #endif
 
@@ -43,13 +47,13 @@ static const char* TAG = "esp32la";
 
 #define ledPin 21 //Led on while running and Blinks while transfering data.
 
-#ifdef DEBUG
-unsigned int time_debug_indice_dma[1024];
-unsigned int time_debug_indice_dma_p=0;
+uint32_t time_debug_indice_dma[10];
+uint16_t time_debug_indice_dma_p=0;
 
-unsigned int time_debug_indice_rle[1024];
-unsigned int time_debug_indice_rle_p=0;
-#endif
+uint32_t time_debug_indice_rle[10];
+uint16_t time_debug_indice_rle_p=0;
+
+uint16_t time_debug_indice_lenght = 10;
 
 int stop_at_desc=-1;
 unsigned int logicIndex = 0;
@@ -227,6 +231,22 @@ void dma_serializer( dma_elem_t *dma_buffer ){
    }
 }
 
+
+void dmabuff_compresser_ch1( uint8_t *dma_buffer ){
+  //00,s1,00,s2,00,s3,00,s4.... - > s1,s2,s3,s4,00,00,00,00...
+  for ( int i=0, p=0 ; i < s_state->dma_buf_width-4 ; i+=4 ){
+   dma_buffer[p++]=dma_buffer[i+1];
+   dma_buffer[p++]=dma_buffer[i+3];
+   }
+}
+void dmabuff_compresser_ch2( uint8_t *dma_buffer ){
+  //00,s1,00,s2,00,s3,00,s4.... - > s1,s2,s3,s4,00,00,00,00...
+  for ( int i=0, p=0 ; i < s_state->dma_buf_width-4 ; i+=4 ){
+   dma_buffer[p++]=dma_buffer[i+0];
+   dma_buffer[p++]=dma_buffer[i+2];
+   }
+}
+
 void fast_rle_block_encode_asm_8bit_ch1(uint8_t *dma_buffer, int sample_size){ //size, not count
    uint8_t *desc_buff_end=dma_buffer;
    unsigned clocka=0,clockb=0;
@@ -390,9 +410,9 @@ void fast_rle_block_encode_asm_8bit_ch1(uint8_t *dma_buffer, int sample_size){ /
 
       
     clockb = xthal_get_ccount();
-#ifdef DEBUG
-    time_debug_indice_rle[time_debug_indice_rle_p++]=clockb;
-#endif
+    //if(time_debug_indice_rle_p < time_debug_indice_lenght)
+    //  time_debug_indice_rle[time_debug_indice_rle_p++]=clockb;
+
  //   Serial_Debug_Port.printf("\r\n asm_process takes %d clocks\r\n",(clockb-clocka));
  //   Serial_Debug_Port.printf( "RX  Buffer = %d bytes\r\n", sample_size );
  //   Serial_Debug_Port.printf( "RLE Buffer = %d bytes\r\n", (rle_buff_p - rle_buff) );
@@ -561,9 +581,7 @@ void fast_rle_block_encode_asm_8bit_ch2(uint8_t *dma_buffer, int sample_size){ /
 
       
     clockb = xthal_get_ccount();
-#ifdef DEBUG
-    time_debug_indice_rle[time_debug_indice_rle_p++]=clockb;
-#endif
+    
  //   Serial_Debug_Port.printf("\r\n asm_process takes %d clocks\r\n",(clockb-clocka));
  //   Serial_Debug_Port.printf( "RX  Buffer = %d bytes\r\n", sample_size );
  //   Serial_Debug_Port.printf( "RLE Buffer = %d bytes\r\n", (rle_buff_p - rle_buff) );
@@ -572,8 +590,8 @@ void fast_rle_block_encode_asm_8bit_ch2(uint8_t *dma_buffer, int sample_size){ /
 }
 
 void fast_rle_block_encode_asm_16bit(uint8_t *dma_buffer, int sample_size){ //size, not count
-   uint8_t *desc_buff_end=dma_buffer;
-   unsigned clocka=0,clockb=0;
+   //uint8_t *desc_buff_end=dma_buffer;
+   //uint32_t clocka=0,clockb=0;
 
    /* We have to encode RLE samples quick.
     * Each sample need to be encoded under 12 clocks @240Mhz CPU 
@@ -586,7 +604,7 @@ void fast_rle_block_encode_asm_16bit(uint8_t *dma_buffer, int sample_size){ //si
     
    int dword_count=(sample_size/4) -1;
    
-   clocka = xthal_get_ccount();
+   //clocka = xthal_get_ccount();
    
    /* No, Assembly is not that hard. You are just too lazzy. */
    
@@ -695,13 +713,13 @@ void fast_rle_block_encode_asm_16bit(uint8_t *dma_buffer, int sample_size){ //si
       :
       :"a"(&dma_buffer), "a"(dword_count), "a"(&rle_buff_p):
       "a4","a5","a6","a7","a8","a9","a10","a11","memory");
-    clockb = xthal_get_ccount();
-#ifdef DEBUG
-    time_debug_indice_rle[time_debug_indice_rle_p++]=clockb;
-#endif
-
-//    delay(10);
-
+    
+    //clockb = xthal_get_ccount();
+    
+    //if(time_debug_indice_rle_p < time_debug_indice_lenght)
+    //time_debug_indice_rle[time_debug_indice_rle_p++]=(clockb);
+      //time_debug_indice_rle[time_debug_indice_rle_p++]=(clockb-clocka);
+    
     //Serial_Debug_Port.printf("\r\n asm_process takes %d clocks\r\n",(clockb-clocka));
     //Serial_Debug_Port.printf( "RX  Buffer = %d bytes\r\n", sample_size );
     //Serial_Debug_Port.printf( "RLE Buffer = %d bytes\r\n", (rle_buff_p - rle_buff) );

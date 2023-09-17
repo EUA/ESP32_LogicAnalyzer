@@ -25,7 +25,6 @@
  *  https://github.com/gillham/logic_analyzer/issues for SUMP protocol as template.
  * 
  */ 
-
 #include "ESP32_LogicAnalyzer.h"
 
 i2s_parallel_buffer_desc_t bufdesc;
@@ -34,12 +33,11 @@ i2s_parallel_config_t cfg;
 void setup(void) {
   #ifdef _DEBUG_MODE_
   Serial_Debug_Port.begin(Serial_Debug_Port_Baud);
+  //Using for development
+  //OLS_Port.begin(OLS_Port_Baud, SERIAL_8N1, 13, 12);
   #endif
   
   OLS_Port.begin(OLS_Port_Baud);
-
-  //Using for development
-  //OLS_Port.begin(OLS_Port_Baud, SERIAL_8N1, 13, 12);
 
   //WiFi.mode(WIFI_OFF);
   //btStop();
@@ -56,7 +54,7 @@ void setup(void) {
   cfg.gpio_bus[5]  = 5;
   cfg.gpio_bus[6]  = 26; //GPIO06 used for SCK, bootloop, //GPIO16 is UART2 RX 
   cfg.gpio_bus[7]  = 27; //GPIO07 used for SDO, bootloop  //GPIO17 is UART2 TX
-
+  
   cfg.gpio_bus[8]  = 18;//GPIO8 used for SDI, bootloop
   cfg.gpio_bus[9]  = 19;//GPIO9 lead SW_CPU_RESET on WROOVER module
   cfg.gpio_bus[10] = 20;//GPI10 lead SW_CPU_RESET on WROOVER module
@@ -66,8 +64,8 @@ void setup(void) {
   cfg.gpio_bus[14] = 14;
   cfg.gpio_bus[15] = 15;
   
-  cfg.gpio_clk_out= 23; // Pin22 used for LedC output
-  cfg.gpio_clk_in = 22; // Pin23 used for XCK input from LedC
+  cfg.gpio_clk_out= 22; // Pin22 used for LedC output
+  cfg.gpio_clk_in = 23; // Pin23 used for XCK input from LedC
   
   //GPIO 24,28,29,30,31 results bootloop
     
@@ -187,13 +185,12 @@ void loop()
         if (rleEnabled)
           Serial_Debug_Port.println("RLE Compression enable");
         else
-          Serial_Debug_Port.println("Non-RLE Operation enable");
+          Serial_Debug_Port.println("Non-RLE Operation");
 
         Serial_Debug_Port.printf("Demux %c\r\n", cmdBytes[0] & 0x01 ? 'Y' : 'N');
         Serial_Debug_Port.printf("Filter %c\r\n", cmdBytes[0] & 0x02 ? 'Y' : 'N');
         Serial_Debug_Port.printf("Channels to read: 0x%X \r\n",  channels_to_read);
-        if(channels_to_read == 3)
-          Serial_Debug_Port.printf("External Clock %c\r\n", cmdBytes[0] & 0x40 ? 'Y' : 'N');
+        Serial_Debug_Port.printf("External Clock %c\r\n", cmdBytes[0] & 0x40 ? 'Y' : 'N');
         Serial_Debug_Port.printf("inv_capture_clock %c\r\n", cmdBytes[0] & 0x80 ? 'Y' : 'N');
         #endif
         break;
@@ -293,11 +290,15 @@ void captureMilli() {
 
   ESP_LOGD(TAG, "dma_sample_count: %d", s_state->dma_sample_count);
   rle_init();
+  
   start_dma_capture();
-
+  yield();
+  I2S0.conf.rx_start = 1;
+  delay(100); //this delay is strictly need for error free capturing...
+  
   while (! s_state->dma_done )
     delay(100);
-
+  
   yield();
 
   digitalWrite( ledPin, LOW );
@@ -307,7 +308,7 @@ void captureMilli() {
   #endif
   ESP_LOGD(TAG, "Copying buffer.");
 
-  int filled_desc = ((readCount/2) / s_state->dma_sample_per_desc) + 1;
+  int filled_desc = ceil( (readCount/2.0) / s_state->dma_sample_per_desc);
   int filled_sample_offset = ((readCount/2) % s_state->dma_sample_per_desc); //((readCount - 1) % s_state->dma_val_per_desc) % s_state->dma_sample_per_desc;
   int filled_full_sample_offset = s_state->dma_sample_per_desc;
   int tx_count = 0;
@@ -315,17 +316,17 @@ void captureMilli() {
   Serial_Debug_Port.printf("used_desc = %d\r\n", filled_desc);
   Serial_Debug_Port.printf("used_sample_offset = %d\r\n", filled_sample_offset);
 
-#ifdef DEBUG
   Serial_Debug_Port.printf( "\r\nDMA Times:" );
-  for(int i = 0 ; i <  50 ; i++){
+  for(int i = 0 ; i <  time_debug_indice_lenght ; i++){
     Serial_Debug_Port.printf( "%u\t", time_debug_indice_dma[i]-time_debug_indice_dma[0] );
     }
   
   Serial_Debug_Port.printf( "\r\nRLE Times:" );
-  for(int i = 0 ; i <  50 ; i++){
+  for(int i = 0 ; i <  time_debug_indice_lenght ; i++){
     Serial_Debug_Port.printf( "%u\t", time_debug_indice_rle[i]-time_debug_indice_dma[0] );
+    //Serial_Debug_Port.printf( "%u\t", time_debug_indice_rle[i]-time_debug_indice_dma[0] );
     }
-#endif
+  
   Serial_Debug_Port.printf( "\r\nDone\r\n" );
   Serial_Debug_Port.flush();
   #endif
@@ -360,7 +361,9 @@ void captureMilli() {
     }
   else
     ESP_LOGD(TAG, "Triggered TX");
-    
+
+  //At SUMP protocol, you need to replay cache in LIFO, not FIFO... So send samples from end, not from start...
+  
   if(rleEnabled){
     ESP_LOGD(TAG, "RLE TX");
     int rle_fill = (rle_buff_p - rle_buff);
@@ -487,11 +490,22 @@ void captureMilli() {
 */      
 
     }
-   else{
+  else{
     for ( int j = filled_desc; j >= 0 ; j-- ) {
       ESP_LOGD(TAG, "filled_buff trgx = %d", (j + s_state->dma_desc_triggered + s_state->dma_desc_count) % s_state->dma_desc_count);
       digitalWrite( ledPin, !digitalRead(ledPin) );
       //for( int i=s_state->dma_buf_width/4 - 1; i >=0 ; i-- ){
+      
+      if(0){
+        j == filled_desc ? filled_sample_offset : filled_full_sample_offset;
+        //int descnum=j +s_state->dma_desc_triggered +s_state->dma_desc_count) % s_state->dma_desc_count][i];
+        
+        //dmabuff_compresser_ch1( s_state->dma_buf[descnum] );
+        
+        //OLS_Port.write(s_state->dma_buf[descnum]);
+        
+        }
+      else
       for ( int i = (j == filled_desc ? filled_sample_offset : filled_full_sample_offset ) ; i >= 0 ; i-- ) {
         //Serial.printf( "%02X %02X ", s_state->dma_buf[j][i].sample1,  s_state->dma_buf[j][i].sample2 );
         cur = s_state->dma_buf[ (j
@@ -505,25 +519,38 @@ void captureMilli() {
         if (channels_to_read == 1) {
           OLS_Port.write(cur.sample2);
           OLS_Port.write(cur.sample1);
+          OLS_Port.flush();
+          yield();
         }
         else if (channels_to_read == 2) {
           OLS_Port.write(cur.unused2);
           OLS_Port.write(cur.unused1);
+          OLS_Port.flush();
+          yield();
         }
-        else if (channels_to_read == 3) {
+        else if (channels_to_read == 3)
+        {
           OLS_Port.write(cur.sample2);
           OLS_Port.write(cur.unused2);
           OLS_Port.write(cur.sample1);
           OLS_Port.write(cur.unused1);
+          OLS_Port.flush();
+          yield();
         }
         tx_count += 2;
-        if (tx_count >= readCount)
+        //vTaskDelay(1);
+        if (tx_count >= readCount){
+          #ifdef _DEBUG_MODE_
+            Serial_Debug_Port.printf("BRexit triggered." );
+           #endif
           goto brexit;
+          }
       }
+    vTaskDelay(1);
     }
+    
   }
 brexit:
-  //OLS_Port.flush();
   //ESP_LOGD(TAG, "TX_Count: %d", tx_count);
   ESP_LOGD(TAG, "End. TX: %d", tx_count);
   digitalWrite( ledPin, LOW );
