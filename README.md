@@ -11,7 +11,7 @@ A *SUMP* compatible 16Bit Logic Analyzer for ESP32 MCUs.
 * Analog input is **NOT** available.
 * ~~WROOVER modules support **2M** samples but only up to **2 Mhz** due bandwith limit on PSRAM access.~~ Under development.
 * Default OLS port is **UART0** and default baudrate is **912600**.
-* You can use **UART2** for high speed OLS communication by using **USE_SERIAL2_FOR_OLS** macro at ESP32_LogicAnalyzer.h file. Default OLS baudrate is **3M** on this mode.
+* You can use **UART2** and or higher baud rates for high speed OLS communication by altering the lines at top of the header file...
 * **WARNING:** 
   - For OLS port at UART0
     - Set **"Core Debug Level"=None** before compiling code at arduino, specially for > 10Mhz capture operations.

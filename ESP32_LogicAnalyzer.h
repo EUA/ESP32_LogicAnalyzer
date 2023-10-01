@@ -14,7 +14,7 @@ static const char* TAG = "esp32la";
 
 
 
-#define _DEBUG_MODE_
+#define _DEBUG_MODE_x
 
 #ifndef _DEBUG_MODE_
 
